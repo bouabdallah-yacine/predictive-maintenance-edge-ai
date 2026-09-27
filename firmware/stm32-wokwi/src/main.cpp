@@ -47,6 +47,12 @@
 #define ACS_ZERO_MV    1650
 #define ACS_SENS_UV_MA 122
 
+// 1 = MPU6050 utilisé ; 0 = désactivé (la vibration ne vient alors que du
+// bouton "Panne"). Utile si le bus I2C pose problème.
+#ifndef USE_MPU6050
+#define USE_MPU6050    1
+#endif
+
 #define VIB_PERIOD_MS  10       // 100 Hz
 #define VIB_WINDOW     100      // fenêtre RMS = 1 s
 
@@ -83,10 +89,12 @@ static bool mpuWrite(uint8_t reg, uint8_t val) {
   return Wire.endTransmission() == 0;
 }
 
+// Lecture de registres : écriture de l'adresse (avec STOP), puis lecture.
+// (Pas de "repeated start" : plus simple et mieux supporté par le simulateur.)
 static bool mpuInit() {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x75);                                  // WHO_AM_I
-  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.endTransmission() != 0) return false;
   if (Wire.requestFrom(MPU_ADDR, 1) != 1 || Wire.read() != 0x68) return false;
   return mpuWrite(0x6B, 0x00)      // PWR_MGMT_1 : réveil
       && mpuWrite(0x1A, 0x03)      // CONFIG : filtre passe-bas 44 Hz
@@ -97,7 +105,7 @@ static bool mpuInit() {
 static int32_t mpuReadMagnitudeMg() {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B);                                  // ACCEL_XOUT_H
-  if (Wire.endTransmission(false) != 0) return -1;
+  if (Wire.endTransmission() != 0) return -1;
   if (Wire.requestFrom(MPU_ADDR, 6) != 6) return -1;
   uint8_t d[6];
   for (int i = 0; i < 6; i++) d[i] = Wire.read();    // ordre de lecture garanti
@@ -288,12 +296,17 @@ void setup() {
   analogReadResolution(12);
 
   // Initialisation des capteurs AVANT FreeRTOS (plus simple à diagnostiquer)
+#if USE_MPU6050
   Link.println("# init I2C...");
   Wire.setSDA(PB7);
   Wire.setSCL(PB6);
   Wire.begin();
+  Link.println("# I2C pret, detection MPU6050...");
   g_mpuOk = mpuInit();
   Link.println(g_mpuOk ? "# MPU6050 OK" : "# MPU6050 absent (vibration desactivee)");
+#else
+  Link.println("# MPU6050 desactive (USE_MPU6050 = 0)");
+#endif
   dht.begin();
   Link.println("# DHT22 pret");
 
