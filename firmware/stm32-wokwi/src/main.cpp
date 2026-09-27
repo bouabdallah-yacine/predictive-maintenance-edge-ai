@@ -51,7 +51,8 @@
 #define VIB_WINDOW     100      // fenêtre RMS = 1 s
 
 // ---------------------------------------------------------------- Objets
-HardwareSerial Link(PA10, PA9);           // USART1 : RX, TX
+// USART1 (PA9 TX / PA10 RX) : instance fournie par le core STM32duino
+#define Link Serial1
 DHT dht(PIN_DHT, DHT22);
 
 typedef struct {
@@ -207,9 +208,9 @@ static void AnalysisTask(void *) {
     if (lv > g) g = lv;
     if (lc > g) g = lc;
 
-    digitalWrite(PIN_LED_OK,    g == LVL_NORMAL);
-    digitalWrite(PIN_LED_WARN,  g == LVL_WARNING);
-    digitalWrite(PIN_LED_ALARM, g == LVL_CRITICAL);
+    digitalWrite(PIN_LED_OK,    g == LVL_NORMAL   ? HIGH : LOW);
+    digitalWrite(PIN_LED_WARN,  g == LVL_WARNING  ? HIGH : LOW);
+    digitalWrite(PIN_LED_ALARM, g == LVL_CRITICAL ? HIGH : LOW);
     if (g == LVL_CRITICAL) tone(PIN_BUZZER, 2000, 300);
 
     proto_frame_t f;
@@ -269,6 +270,8 @@ static void onButton() {
 
 // ============================================================================
 void setup() {
+  Link.setRx(PA10);
+  Link.setTx(PA9);
   Link.begin(115200);
   Link.println("# Machine Monitor - STM32F103 / FreeRTOS");
 
