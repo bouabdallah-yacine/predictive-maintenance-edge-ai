@@ -85,7 +85,7 @@ Par défaut tout passe par le broker public `broker.hivemq.com` : aucun Mosquitt
 
 **Provoquer des anomalies dans Wokwi :**
 - Clique sur le **DHT22** → monte la température au-delà de 60 °C puis 75 °C.
-- Clique sur le **MPU6050** → mets l'accélération X à 1,5 g → vibration anormale.
+- La vibration est calculée sur la **variation** du signal (RMS, moyenne retirée) : une valeur fixe du MPU6050 donne donc 0 g. Pour simuler une vibration, utilise le bouton « Panne » (balourd à 25 Hz).
 - Tourne le **potentiomètre** (il simule le capteur de courant ACS712) vers une extrémité → surintensité.
 - Appuie sur le **bouton rouge** « Panne » → panne complète simulée (balourd 25 Hz, surchauffe, surintensité).
 - Ou clique sur **« Injecter une panne »** dans le dashboard : la commande descend par MQTT jusqu'à l'ESP32.

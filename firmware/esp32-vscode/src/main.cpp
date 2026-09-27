@@ -175,10 +175,16 @@ void taskVibration(void *) {
     n++;
 
     if (idx == 0) {                    // fenêtre pleine → RMS + crête
-      float sum = 0, peak = 0;
+      // RMS de la composante alternative : on retire la moyenne de la
+      // fenêtre (gravité, inclinaison, offset du capteur) pour ne garder
+      // que la vibration réelle.
+      float mean = 0, sum = 0, peak = 0;
+      for (int i = 0; i < VIB_WINDOW; i++) mean += window[i];
+      mean /= VIB_WINDOW;
       for (int i = 0; i < VIB_WINDOW; i++) {
-        sum += window[i] * window[i];
-        peak = fmaxf(peak, fabsf(window[i]));
+        float d = window[i] - mean;
+        sum += d * d;
+        peak = fmaxf(peak, fabsf(d));
       }
       xSemaphoreTake(dataMutex, portMAX_DELAY);
       g_sensors.vibRms  = sqrtf(sum / VIB_WINDOW);

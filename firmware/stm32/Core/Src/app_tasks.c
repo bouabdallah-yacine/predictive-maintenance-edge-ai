@@ -99,11 +99,16 @@ static void VibTask(void *arg)
 
     if (idx >= VIB_WINDOW) {
       idx = 0;
+      /* RMS de la composante alternative (moyenne de la fenêtre retirée) */
+      int32_t mean = 0;
+      for (int i = 0; i < VIB_WINDOW; i++) mean += win[i];
+      mean /= VIB_WINDOW;
       uint64_t sumsq = 0;
       int32_t peak = 0;
       for (int i = 0; i < VIB_WINDOW; i++) {
-        sumsq += (int64_t)win[i] * win[i];
-        if (abs(win[i]) > peak) peak = abs(win[i]);
+        int32_t d = win[i] - mean;
+        sumsq += (uint64_t)((int64_t)d * d);
+        if (abs(d) > peak) peak = abs(d);
       }
       osMutexAcquire(measureMutex, osWaitForever);
       g_measure.vib_rms_mg  = (uint16_t)sqrtf((float)sumsq / VIB_WINDOW);
