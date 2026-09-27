@@ -1,11 +1,11 @@
 // ============================================================================
 //  Passerelle STM32 (Wokwi) → MQTT
 //  Joue le rôle de l'ESP32 : lit les trames UART du STM32 simulé (exposées par
-//  Wokwi sur localhost:4000) et les publie en MQTT, au même format que l'ESP32.
+//  Wokwi sur localhost:4100) et les publie en MQTT, au même format que l'ESP32.
 //  Les commandes du dashboard (fault_on / fault_off) sont renvoyées au STM32.
 //
 //  Usage (depuis le dossier backend) :
-//    node tools/stm32-gateway.js                 → localhost:4000, device stm32-01
+//    node tools/stm32-gateway.js                 → localhost:4100, device stm32-01
 //    node tools/stm32-gateway.js --dry-run       → affiche sans publier
 // ============================================================================
 import 'dotenv/config';
@@ -14,7 +14,7 @@ import { FrameParser, TelnetFilter } from '../src/frameParser.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const HOST   = arg('host', 'localhost');
-const PORT   = Number(arg('port', 4000));
+const PORT   = Number(arg('port', 4100));
 const DEVICE = arg('device', 'stm32-01');
 const PREFIX = process.env.TOPIC_PREFIX ?? 'pfe-monitor-7f3a';
 const MQTT_URL = process.env.MQTT_URL ?? 'mqtt://broker.hivemq.com:1883';
