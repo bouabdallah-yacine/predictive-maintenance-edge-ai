@@ -1,0 +1,7 @@
+[wokwi]
+version = 1
+firmware = '.pio/build/nucleo/firmware.bin'
+elf = '.pio/build/nucleo/firmware.elf'
+# Le port série du STM32 (USART2, PA2/PA3) est exposé sur localhost:4100
+# → la passerelle backend/tools/stm32-gateway.js le lit et publie en MQTT
+rfc2217ServerPort = 4100

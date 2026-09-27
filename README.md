@@ -40,7 +40,7 @@ firmware/
 ├── esp32-wokwi/      ESP32 autonome : 6 tâches FreeRTOS, capteurs, OLED, MQTT  ← à lancer sur Wokwi
 ├── esp32-bridge/     ESP32 passerelle UART → MQTT (architecture complète avec STM32)
 ├── esp32-vscode/     Projet PlatformIO de l'ESP32 pour Wokwi dans VS Code
-├── stm32-wokwi/      STM32 Blue Pill + FreeRTOS (PlatformIO) simulable sur Wokwi
+├── stm32-nucleo/      STM32 Nucleo-C031C6 + FreeRTOS (PlatformIO) simulable sur Wokwi
 └── stm32/            STM32 FreeRTOS (CMSIS-RTOS v2), pilotes capteurs, protocole UART, Renode
 gateway/              Passerelle Python UART/Renode → MQTT (remplace l'ESP32 en simulation)
 simulator/            Simulateur de machines (scénarios de pannes réalistes)
@@ -94,9 +94,9 @@ Par défaut tout passe par le broker public `broker.hivemq.com` : aucun Mosquitt
 
 > ⚠️ Le broker est public : change `TOPIC_PREFIX` (même valeur dans `sketch.ino`, `backend/.env` et le simulateur) pour ne pas recevoir les données d'un autre utilisateur.
 
-### Option 4 : STM32 Blue Pill + FreeRTOS simulé sur Wokwi (VS Code)
+### Option 4 : STM32 Nucleo-C031C6 + FreeRTOS simulé sur Wokwi (VS Code)
 
-Ouvre `firmware/stm32-wokwi/` dans VS Code → PlatformIO **Build** → **F1 › Wokwi: Start Simulator**,
+Ouvre `firmware/stm32-nucleo/` dans VS Code → PlatformIO **Build** → **F1 › Wokwi: Start Simulator**,
 puis dans `backend/` : `npm run stm32`. Wokwi expose l'UART du STM32 sur `localhost:4000`
 (RFC2217) ; la passerelle décode les trames et les publie en MQTT (machine **stm32-01**).
 Les commandes « Injecter une panne » du dashboard redescendent jusqu'au STM32.

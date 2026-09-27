@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [firmware/esp32-vscode, firmware/stm32-wokwi]
+        project: [firmware/esp32-vscode, firmware/stm32-nucleo]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -1,7 +1,0 @@
-[wokwi]
-version = 1
-firmware = '.pio/build/bluepill/firmware.bin'
-elf = '.pio/build/bluepill/firmware.elf'
-# Le port série du STM32 (USART1) est exposé sur localhost:4100
-# → la passerelle backend/tools/stm32-gateway.js le lit et publie en MQTT
-rfc2217ServerPort = 4100

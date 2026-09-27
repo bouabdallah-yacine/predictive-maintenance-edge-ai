@@ -3,32 +3,51 @@
  * @brief   Encodage / décodage des trames UART (voir protocol.h).
  */
 #include "protocol.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char HEX[] = "0123456789ABCDEF";
 
+/* Écrit un entier en décimal (sans printf : léger et déterministe). */
+static char *put_int(char *p, const char *end, int32_t v)
+{
+  char tmp[12];
+  int n = 0;
+  uint32_t u = (v < 0) ? (uint32_t)(-(int64_t)v) : (uint32_t)v;
+  do { tmp[n++] = (char)('0' + (u % 10u)); u /= 10u; } while (u && n < (int)sizeof tmp);
+  if (v < 0) tmp[n++] = '-';
+  if (p + n > end) return NULL;
+  while (n) *p++ = tmp[--n];
+  return p;
+}
+
 size_t proto_encode(const proto_frame_t *f, char *out, size_t out_size)
 {
   if (!f || !out || out_size < 16) return 0;
 
-  /* Corps entre '$' et '*' */
-  int n = snprintf(out, out_size, "$MM,%u,%d,%u,%u,%u,%u,%u*",
-                   (unsigned)f->seq, (int)f->temp_d, (unsigned)f->hum_d,
-                   (unsigned)f->vib_mg, (unsigned)f->peak_mg,
-                   (unsigned)f->curr_ma, (unsigned)f->flags);
-  if (n < 0 || (size_t)n + 5 > out_size) return 0;   /* +2 CS +\r\n +\0 */
+  const char *end = out + out_size - 5;          /* place pour CS, \r\n, \0 */
+  const int32_t fields[7] = { f->seq, f->temp_d, f->hum_d, f->vib_mg,
+                              f->peak_mg, f->curr_ma, f->flags };
+  char *p = out;
+  *p++ = '$'; *p++ = 'M'; *p++ = 'M';
+  for (int i = 0; i < 7; i++) {
+    if (p >= end) return 0;
+    *p++ = ',';
+    p = put_int(p, end, fields[i]);
+    if (!p) return 0;
+  }
+  if (p >= end) return 0;
 
-  uint8_t cs = 0;
-  for (int i = 1; i < n - 1; i++) cs ^= (uint8_t)out[i];
+  uint8_t cs = 0;                                 /* XOR entre '$' et '*' */
+  for (char *q = out + 1; q < p; q++) cs ^= (uint8_t)*q;
 
-  out[n++] = HEX[cs >> 4];
-  out[n++] = HEX[cs & 0x0F];
-  out[n++] = '\r';
-  out[n++] = '\n';
-  out[n]   = '\0';
-  return (size_t)n;
+  *p++ = '*';
+  *p++ = HEX[cs >> 4];
+  *p++ = HEX[cs & 0x0F];
+  *p++ = '\r';
+  *p++ = '\n';
+  *p   = '\0';
+  return (size_t)(p - out);
 }
 
 void proto_parser_init(proto_parser_t *p)

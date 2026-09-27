@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- *  Machine Monitor — Nœud d'acquisition STM32 (Blue Pill STM32F103C8)
+ *  Machine Monitor — Nœud d'acquisition STM32 (Nucleo-C031C6, Cortex-M0+)
  *  FreeRTOS · I2C · ADC · GPIO · EXTI · UART — simulable dans Wokwi
  * ============================================================================
  *
@@ -12,8 +12,11 @@
  *                                           LEDs verte/jaune/rouge + buzzer
  *
  *  Câblage (diagram.json) :
- *    DHT22 → PA1 | MPU6050 → I2C1 (PB6 SCL, PB7 SDA) | Potentiomètre (ACS712) → PA0
- *    LEDs PB12/PB13/PB14 | Buzzer PB15 | Bouton "Panne" PB11 | USART1 PA9 TX / PA10 RX
+ *    DHT22 → PA1 | MPU6050 → I2C1 (PB8 SCL, PB9 SDA) | Potentiomètre (ACS712) → PA0
+ *    LEDs PB13/PB14/PB15 | Buzzer PB10 | Bouton "Panne" PB11 | USART2 PA2 TX / PA3 RX
+ *
+ *  Le Cortex-M0+ n'a pas d'unité flottante : les calculs de vibration sont
+ *  faits en entiers (racine carrée entière, motif sinusoïdal précalculé).
  *
  *  Chaque seconde, une trame est envoyée sur USART1 (format dans protocol.h) :
  *    $MM,<seq>,<temp×10>,<hum×10>,<vib mg>,<crête mg>,<courant mA>,<flags>*<XOR>
@@ -28,10 +31,10 @@
 // ---------------------------------------------------------------- Brochage
 #define PIN_DHT        PA1
 #define PIN_CURRENT    PA0
-#define PIN_LED_OK     PB12
-#define PIN_LED_WARN   PB13
-#define PIN_LED_ALARM  PB14
-#define PIN_BUZZER     PB15
+#define PIN_LED_OK     PB13
+#define PIN_LED_WARN   PB14
+#define PIN_LED_ALARM  PB15
+#define PIN_BUZZER     PB10
 #define PIN_BUTTON     PB11
 
 // ---------------------------------------------------------------- Seuils
@@ -57,8 +60,8 @@
 #define VIB_WINDOW     100      // fenêtre RMS = 1 s
 
 // ---------------------------------------------------------------- Objets
-// USART1 (PA9 TX / PA10 RX) : instance fournie par le core STM32duino
-#define Link Serial1
+// USART2 (PA2 TX / PA3 RX) = port série par défaut de la Nucleo (ST-Link)
+#define Link Serial
 DHT dht(PIN_DHT, DHT22);
 
 typedef struct {
@@ -81,6 +84,18 @@ static bool             g_mpuOk = false;   // résultat de l'init MPU6050 (faite
 //  MPU6050 : pilote I2C minimal (registres du datasheet)
 // ============================================================================
 #define MPU_ADDR 0x68
+
+// Racine carrée entière (méthode bit à bit) : pas de flottant sur Cortex-M0+
+static uint32_t isqrt(uint32_t x) {
+  uint32_t r = 0, b = 1UL << 30;
+  while (b > x) b >>= 2;
+  while (b) {
+    if (x >= r + b) { x -= r + b; r = (r >> 1) + b; }
+    else r >>= 1;
+    b >>= 2;
+  }
+  return r;
+}
 
 static bool mpuWrite(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(MPU_ADDR);
@@ -112,8 +127,9 @@ static int32_t mpuReadMagnitudeMg() {
   int16_t ax = (int16_t)((d[0] << 8) | d[1]);
   int16_t ay = (int16_t)((d[2] << 8) | d[3]);
   int16_t az = (int16_t)((d[4] << 8) | d[5]);
-  float x = ax, y = ay, z = az;
-  return (int32_t)(sqrtf(x * x + y * y + z * z) * 1000.0f / 8192.0f);
+  // |a| en LSB (±4 g → 8192 LSB/g), puis conversion en milli-g
+  uint32_t sq = (uint32_t)((int32_t)ax * ax) + (uint32_t)((int32_t)ay * ay) + (uint32_t)((int32_t)az * az);
+  return (int32_t)(isqrt(sq) * 1000UL / 8192UL);
 }
 
 // ============================================================================
@@ -134,7 +150,9 @@ static void VibTask(void *) {
     if (mag < 0) { ok = false; mag = 1000; }
     int32_t s = mag;
     if (g_fault) {                                   // balourd simulé à 25 Hz
-      s += (int32_t)(900.0f * sinf(2.0f * PI * 25.0f * (float)n / 100.0f));
+      // 25 Hz échantillonné à 100 Hz = 4 points par période : sin = 0, 1, 0, -1
+      static const int16_t SINE4[4] = { 0, 900, 0, -900 };
+      s += SINE4[n & 3];
     }
     win[idx++] = (int16_t)constrain(s, -32000, 32000);
     n++;
@@ -152,7 +170,7 @@ static void VibTask(void *) {
         if (abs(d) > peak) peak = abs(d);
       }
       xSemaphoreTake(measureMutex, portMAX_DELAY);
-      g_measure.vib_rms_mg  = (uint16_t)sqrtf((float)sumsq / VIB_WINDOW);
+      g_measure.vib_rms_mg  = (uint16_t)isqrt(sumsq / VIB_WINDOW);
       g_measure.vib_peak_mg = (uint16_t)peak;
       g_measure.mpu_ok      = ok;
       xSemaphoreGive(measureMutex);
@@ -282,10 +300,8 @@ static void onButton() {
 
 // ============================================================================
 void setup() {
-  Link.setRx(PA10);
-  Link.setTx(PA9);
   Link.begin(115200);
-  Link.println("# Machine Monitor - STM32F103 / FreeRTOS");
+  Link.println("# Machine Monitor - STM32C031 / FreeRTOS");
 
   pinMode(PIN_LED_OK, OUTPUT);
   pinMode(PIN_LED_WARN, OUTPUT);
@@ -298,8 +314,8 @@ void setup() {
   // Initialisation des capteurs AVANT FreeRTOS (plus simple à diagnostiquer)
 #if USE_MPU6050
   Link.println("# init I2C...");
-  Wire.setSDA(PB7);
-  Wire.setSCL(PB6);
+  Wire.setSDA(PB9);
+  Wire.setSCL(PB8);
   Wire.begin();
   Link.println("# I2C pret, detection MPU6050...");
   g_mpuOk = mpuInit();
@@ -315,10 +331,11 @@ void setup() {
 
   //          fonction      nom         pile(mots) param prio               handle
   BaseType_t ok = pdTRUE;
-  ok &= xTaskCreate(VibTask,      "vib",      256, NULL, tskIDLE_PRIORITY + 4, NULL);
-  ok &= xTaskCreate(EnvTask,      "env",      384, NULL, tskIDLE_PRIORITY + 3, NULL);
-  ok &= xTaskCreate(AnalysisTask, "analysis", 256, NULL, tskIDLE_PRIORITY + 3, &analysisHandle);
-  ok &= xTaskCreate(CommTask,     "comm",     384, NULL, tskIDLE_PRIORITY + 2, NULL);
+  // Piles en mots de 4 octets (12 Ko de RAM au total sur ce microcontrôleur)
+  ok &= xTaskCreate(VibTask,      "vib",      160, NULL, tskIDLE_PRIORITY + 4, NULL);
+  ok &= xTaskCreate(EnvTask,      "env",      256, NULL, tskIDLE_PRIORITY + 3, NULL);
+  ok &= xTaskCreate(AnalysisTask, "analysis", 160, NULL, tskIDLE_PRIORITY + 3, &analysisHandle);
+  ok &= xTaskCreate(CommTask,     "comm",     200, NULL, tskIDLE_PRIORITY + 2, NULL);
   Link.println(ok == pdTRUE ? "# taches creees, demarrage FreeRTOS" : "# ERREUR creation des taches (memoire)");
 
   attachInterrupt(digitalPinToInterrupt(PIN_BUTTON), onButton, FALLING);
