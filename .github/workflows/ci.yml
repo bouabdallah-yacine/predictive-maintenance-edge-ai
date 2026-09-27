@@ -44,3 +44,15 @@ jobs:
       # arduino-cli exige que le .ino porte le nom du dossier (Wokwi impose sketch.ino)
       - run: mkdir -p /tmp/sketch && cp firmware/esp32-wokwi/sketch.ino /tmp/sketch/ && arduino-cli compile --fqbn esp32:esp32:esp32 /tmp/sketch
       - run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32-bridge
+
+  platformio:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [firmware/esp32-vscode, firmware/stm32-wokwi]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install platformio
+      - run: pio run -d ${{ matrix.project }}
