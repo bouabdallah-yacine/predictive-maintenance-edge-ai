@@ -1,0 +1,46 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: npm run build
+
+  firmware-protocol:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: firmware/stm32/test } }
+    steps:
+      - uses: actions/checkout@v4
+      - run: gcc -Wall -Wextra -Werror -I../Core/Inc test_protocol.c ../Core/Src/protocol.c -o test_protocol
+      - run: ./test_protocol
+
+  esp32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install PubSubClient ArduinoJson "DHT sensor library for ESPx" "Adafruit MPU6050" "Adafruit Unified Sensor" "Adafruit GFX Library" "Adafruit SSD1306"
+      # arduino-cli exige que le .ino porte le nom du dossier (Wokwi impose sketch.ino)
+      - run: mkdir -p /tmp/sketch && cp firmware/esp32-wokwi/sketch.ino /tmp/sketch/ && arduino-cli compile --fqbn esp32:esp32:esp32 /tmp/sketch
+      - run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32-bridge

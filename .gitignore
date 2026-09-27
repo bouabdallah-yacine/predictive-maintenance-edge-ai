@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+__pycache__/
+firmware/stm32/test/test_protocol
+Debug/
+Release/
+.DS_Store

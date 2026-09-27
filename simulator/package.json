@@ -1,0 +1,12 @@
+{
+  "name": "machine-monitor-simulator",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node simulator.js",
+    "demo": "node simulator.js --scenario demo"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.3"
+  }
+}

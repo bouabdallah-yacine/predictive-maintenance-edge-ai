@@ -1,0 +1,48 @@
+# Lance toute la pile en une commande :   docker compose up --build
+# Avec le simulateur de machine :          docker compose --profile sim up --build
+#
+# Par défaut le backend écoute le broker LOCAL (mosquitto).
+# Pour recevoir les données de Wokwi (qui publie sur le broker public), crée
+# un fichier .env à la racine avec :  MQTT_URL=mqtt://broker.hivemq.com:1883
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883", "9001:9001"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: [mongo-data:/data/db]
+
+  backend:
+    build: ./backend
+    ports: ["4000:4000"]
+    environment:
+      PORT: 4000
+      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
+      TOPIC_PREFIX: ${TOPIC_PREFIX:-pfe-monitor-7f3a}
+      MONGO_URL: mongodb://mongo:27017/machine_monitor
+    depends_on: [mosquitto, mongo]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:4000
+    ports: ["5173:80"]
+    depends_on: [backend]
+
+  simulator:
+    build: ./simulator
+    profiles: ["sim"]
+    environment:
+      MQTT_URL: ${MQTT_URL:-mqtt://mosquitto:1883}
+      TOPIC_PREFIX: ${TOPIC_PREFIX:-pfe-monitor-7f3a}
+    command: ["node", "simulator.js", "--scenario", "demo", "--devices", "2"]
+    depends_on: [mosquitto]
+
+volumes:
+  mongo-data:
