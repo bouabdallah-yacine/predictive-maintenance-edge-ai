@@ -69,6 +69,7 @@ static QueueHandle_t     frameQueue;      // AnalysisTask → CommTask
 static TaskHandle_t      analysisHandle;
 static volatile bool     g_fault = false; // panne simulée (bouton ou commande)
 static volatile uint32_t g_lastIsrMs = 0;
+static bool             g_mpuOk = false;   // résultat de l'init MPU6050 (faite dans setup)
 
 // ============================================================================
 //  MPU6050 : pilote I2C minimal (registres du datasheet)
@@ -114,7 +115,8 @@ static void VibTask(void *) {
   static int16_t win[VIB_WINDOW];
   uint16_t idx = 0;
   uint32_t n = 0;
-  bool ok = mpuInit();
+  bool ok = g_mpuOk;
+  Link.println("# tache vib demarree");
   TickType_t last = xTaskGetTickCount();
 
   for (;;) {
@@ -154,7 +156,7 @@ static void VibTask(void *) {
 //  EnvTask : DHT22 (toutes les 2 s) + courant ACS712 (ADC, moyenne de 32)
 // ============================================================================
 static void EnvTask(void *) {
-  dht.begin();
+  Link.println("# tache env demarree");
   for (;;) {
     uint32_t sum = 0;
     for (int i = 0; i < 32; i++) sum += analogRead(PIN_CURRENT);
@@ -188,6 +190,7 @@ static Level levelOf(int32_t v, int32_t warn, int32_t crit) {
 
 static void AnalysisTask(void *) {
   uint16_t seq = 0;
+  Link.println("# tache analyse demarree");
   TickType_t last = xTaskGetTickCount();
 
   for (;;) {
@@ -242,6 +245,7 @@ static void CommTask(void *) {
   char buf[PROTO_MAX_FRAME];
   char prev = 0;
   proto_frame_t f;
+  Link.println("# tache comm demarree");
   for (;;) {
     if (xQueueReceive(frameQueue, &f, pdMS_TO_TICKS(20)) == pdTRUE) {
       size_t n = proto_encode(&f, buf, sizeof buf);
@@ -280,21 +284,29 @@ void setup() {
   pinMode(PIN_LED_ALARM, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
+  digitalWrite(PIN_LED_OK, HIGH);                    // signe de vie immédiat
   analogReadResolution(12);
 
+  // Initialisation des capteurs AVANT FreeRTOS (plus simple à diagnostiquer)
+  Link.println("# init I2C...");
   Wire.setSDA(PB7);
   Wire.setSCL(PB6);
   Wire.begin();
-  Wire.setClock(400000);
+  g_mpuOk = mpuInit();
+  Link.println(g_mpuOk ? "# MPU6050 OK" : "# MPU6050 absent (vibration desactivee)");
+  dht.begin();
+  Link.println("# DHT22 pret");
 
   measureMutex = xSemaphoreCreateMutex();            // mutex avec héritage de priorité
   frameQueue   = xQueueCreate(8, sizeof(proto_frame_t));
 
   //          fonction      nom         pile(mots) param prio               handle
-  xTaskCreate(VibTask,      "vib",      256,       NULL, tskIDLE_PRIORITY + 4, NULL);
-  xTaskCreate(EnvTask,      "env",      256,       NULL, tskIDLE_PRIORITY + 3, NULL);
-  xTaskCreate(AnalysisTask, "analysis", 256,       NULL, tskIDLE_PRIORITY + 3, &analysisHandle);
-  xTaskCreate(CommTask,     "comm",     256,       NULL, tskIDLE_PRIORITY + 2, NULL);
+  BaseType_t ok = pdTRUE;
+  ok &= xTaskCreate(VibTask,      "vib",      256, NULL, tskIDLE_PRIORITY + 4, NULL);
+  ok &= xTaskCreate(EnvTask,      "env",      384, NULL, tskIDLE_PRIORITY + 3, NULL);
+  ok &= xTaskCreate(AnalysisTask, "analysis", 256, NULL, tskIDLE_PRIORITY + 3, &analysisHandle);
+  ok &= xTaskCreate(CommTask,     "comm",     384, NULL, tskIDLE_PRIORITY + 2, NULL);
+  Link.println(ok == pdTRUE ? "# taches creees, demarrage FreeRTOS" : "# ERREUR creation des taches (memoire)");
 
   attachInterrupt(digitalPinToInterrupt(PIN_BUTTON), onButton, FALLING);
 
