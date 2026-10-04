@@ -29,6 +29,11 @@ STM32 + FreeRTOS  ── trame UART "$MM,...*CS" ──►  ESP32 + FreeRTOS
 | Surchauffe à venir | **Régression linéaire** sur la température | 🔮 « Surchauffe dans ~N min » |
 | Machine déconnectée | **Last Will MQTT** + watchdog serveur | 📡 Hors ligne |
 
+| Alerte sur téléphone | Bot **Telegram** (critiques et prédictives, anti-spam 60 s) | 📱 Notification |
+
+Deux nœuds d'acquisition : **ESP32** (DHT22, MPU6050, ACS712, OLED) et **STM32 Nucleo-C031C6 sous FreeRTOS**
+(NTC, HIH-4030, MPU6050, ACS712) relié à un **ESP32 passerelle** par UART. Historique dans **MongoDB** (7 jours).
+
 Et aussi : LEDs, buzzer et écran OLED locaux (l'alarme marche **sans réseau**), bouton et commande MQTT
 « injecter une panne » pour la démo, tampon des mesures pendant les coupures Wi-Fi, acquittement
 des alertes, export CSV, plusieurs machines, Docker Compose, CI GitHub Actions.
