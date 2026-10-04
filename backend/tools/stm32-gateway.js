@@ -46,11 +46,12 @@ function connect() {
   const telnet = new TelnetFilter();
   let lastSeq = null;
   let line = '';
-  let bytes = 0;
+  let bytes = 0;      // octets bruts reçus (négociation comprise)
+  let textBytes = 0;  // caractères utiles venant du STM32
   const t0 = Date.now();
   // Aide au diagnostic : connecté mais rien reçu au bout de 5 s
   const hint = setTimeout(() => {
-    if (bytes === 0) console.log('[UART] connecté mais aucune donnée reçue : la simulation Wokwi STM32 tourne-t-elle (chronomètre qui avance, onglet visible) ?');
+    if (textBytes === 0) console.log(`[UART] connecté mais aucune donnée du STM32 (${bytes} octets de négociation reçus) : la simulation Wokwi tourne-t-elle (chronomètre qui avance, onglet visible) ?`);
   }, 5000);
 
   socket = net.createConnection({ host: HOST, port: PORT });
@@ -63,6 +64,7 @@ function connect() {
     const text = telnet.push(buf);
     const replies = telnet.takeReplies();
     if (replies.length) socket.write(replies);      // réponses de négociation Telnet
+    textBytes += text.length;
     for (const ch of text) {
       // Affiche les messages texte du STM32 (lignes commençant par #)
       if (ch === '\n') { if (line.startsWith('#')) console.log(`\n[STM32] ${line.trim()}`); line = ''; }
