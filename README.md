@@ -101,6 +101,8 @@ puis dans `backend/` : `npm run stm32`. Wokwi expose l'UART du STM32 sur `localh
 (RFC2217) ; la passerelle décode les trames et les publie en MQTT (machine **stm32-01**).
 Les commandes « Injecter une panne » du dashboard redescendent jusqu'au STM32.
 
+> 💡 Wokwi met la simulation en pause quand son onglet n'est pas visible : garde la fenêtre de simulation affichée (par exemple côte à côte avec le dashboard), sinon aucune trame n'arrive.
+
 ### Option 5 : STM32CubeIDE (HAL) + Renode
 
 Voir [`firmware/stm32/README.md`](firmware/stm32/README.md) : création du projet CubeIDE, exécution du `.elf`
