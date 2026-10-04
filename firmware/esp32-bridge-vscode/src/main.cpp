@@ -28,8 +28,29 @@
 
 #define WIFI_SSID     "Wokwi-GUEST"
 #define WIFI_PASS     ""
-#define MQTT_HOST     "broker.hivemq.com"
-#define MQTT_PORT     1883
+// --- Broker MQTT : identifiants dans secrets.h (non publié sur GitHub) ------
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
+#ifndef MQTT_HOST
+  #define MQTT_HOST    "broker.hivemq.com"   // repli : broker public (démo)
+#endif
+#ifndef MQTT_USE_TLS
+  #define MQTT_USE_TLS 0
+#endif
+#ifndef MQTT_PORT
+  #define MQTT_PORT    (MQTT_USE_TLS ? 8883 : 1883)
+#endif
+#ifndef MQTT_USER
+  #define MQTT_USER    ""
+#endif
+#ifndef MQTT_PASS
+  #define MQTT_PASS    ""
+#endif
+#if MQTT_USE_TLS
+  #include <WiFiClientSecure.h>
+  #include "ca_cert.h"
+#endif
 #define TOPIC_PREFIX  "pfe-monitor-7f3a"   // identique au backend
 #define DEVICE_ID     "stm32-01"           // la machine surveillée par le STM32
 
@@ -46,7 +67,11 @@
 
 static const char *LEVELS[] = {"NORMAL", "WARNING", "CRITICAL"};
 
+#if MQTT_USE_TLS
+WiFiClientSecure net;   // TLS : connexion chiffrée + certificat vérifié
+#else
 WiFiClient net;
+#endif
 PubSubClient mqtt(net);
 QueueHandle_t frameQueue;
 proto_parser_t parser;
@@ -121,6 +146,9 @@ bool publishFrame(const proto_frame_t &f) {
 void taskMqtt(void *) {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS, 6);
+#if MQTT_USE_TLS
+  net.setCACert(ISRG_ROOT_X1);
+#endif
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);
   mqtt.setBufferSize(512);
@@ -136,7 +164,8 @@ void taskMqtt(void *) {
       digitalWrite(PIN_LED_NET, LOW);
       if (wasConnected) { logLine("MQTT perdu, reconnexion"); wasConnected = false; }
       String cid = String("bridge-") + DEVICE_ID + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-      if (mqtt.connect(cid.c_str(), nullptr, nullptr, topicStatus, 1, true, "offline")) {
+      if (mqtt.connect(cid.c_str(), MQTT_USER[0] ? MQTT_USER : nullptr, MQTT_PASS[0] ? MQTT_PASS : nullptr,
+                       topicStatus, 1, true, "offline")) {
         mqtt.publish(topicStatus, "online", true);
         mqtt.subscribe(topicCmd);
         digitalWrite(PIN_LED_NET, HIGH);

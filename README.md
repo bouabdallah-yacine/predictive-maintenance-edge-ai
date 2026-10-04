@@ -151,11 +151,22 @@ Aussi : `<prefix>/<id>/status` (`online` / `offline`, retenu + Last Will) et `<p
 **API REST** : `GET /api/health`, `/api/devices`, `/api/telemetry?deviceId=&minutes=`, `/api/alerts`,
 `/api/stats/:id`, `/api/export.csv`, `POST /api/alerts/:id/ack`, `POST /api/devices/:id/cmd`.
 
+## 🔒 Sécurité
+
+| Mode | Broker | Chiffrement | Authentification |
+|---|---|---|---|
+| Démo (par défaut) | `broker.hivemq.com` public | ❌ | ❌ |
+| **Production** | **HiveMQ Cloud privé** | ✅ TLS 1.2, port 8883, certificat ISRG Root X1 vérifié par l'ESP32 | ✅ identifiant / mot de passe |
+
+- Firmwares ESP32 : copier `include/secrets.example.h` en `include/secrets.h` (exclu de Git) et le remplir.
+- Backend : `MQTT_URL=mqtts://<cluster>.hivemq.cloud:8883`, `MQTT_USERNAME`, `MQTT_PASSWORD` dans `.env`.
+- Les secrets (`.env`, `secrets.h`, token Telegram) ne sont jamais versionnés.
+
 ## 🗺️ Évolutions possibles
 
 - FFT sur la vibration (ESP-DSP / CMSIS-DSP) pour identifier la fréquence du défaut
 - Modèle d'IA embarqué (Edge Impulse / TensorFlow Lite Micro) pour la détection d'anomalies
-- MQTT sécurisé (TLS + authentification), OTA pour le firmware ESP32
+- Droits d'accès par appareil (ACL), OTA pour le firmware ESP32
 - Notifications Telegram ou e-mail sur alerte critique
 
 ## Licence

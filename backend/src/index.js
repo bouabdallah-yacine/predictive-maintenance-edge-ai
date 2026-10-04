@@ -36,16 +36,19 @@ const io = new SocketServer(server, { cors: { origin: '*' } });
 const client = mqtt.connect(MQTT_URL, {
   clientId: `monitor-backend-${Math.random().toString(16).slice(2, 8)}`,
   reconnectPeriod: 2000,
+  // Broker privé : identifiant / mot de passe (vides = broker public)
+  username: process.env.MQTT_USERNAME || undefined,
+  password: process.env.MQTT_PASSWORD || undefined,
 });
 
 client.on('connect', () => {
-  console.log(`[MQTT] connecté à ${MQTT_URL}`);
+  console.log(`[MQTT] connecté à ${MQTT_URL}${MQTT_URL.startsWith('mqtts') ? ' (TLS 🔒)' : ''}${process.env.MQTT_USERNAME ? ` en tant que ${process.env.MQTT_USERNAME}` : ''}`);
   client.subscribe([`${TOPIC_PREFIX}/+/telemetry`, `${TOPIC_PREFIX}/+/status`], { qos: 0 });
   io.emit('broker', { connected: true });
 });
 client.on('reconnect', () => console.log('[MQTT] reconnexion...'));
 client.on('close', () => io.emit('broker', { connected: false }));
-client.on('error', (e) => console.error('[MQTT] erreur :', e.message));
+client.on('error', (e) => console.error('[MQTT] erreur :', e.message, /Not authorized|Bad User Name/i.test(e.message) ? '→ vérifie MQTT_USERNAME / MQTT_PASSWORD dans .env' : ''));
 
 client.on('message', async (topic, payload) => {
   const [, deviceId, kind] = topic.split('/');

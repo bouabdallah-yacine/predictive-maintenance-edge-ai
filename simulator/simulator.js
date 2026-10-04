@@ -84,6 +84,9 @@ const machines = Array.from({ length: N_DEVICES }, (_, i) => new Machine(`machin
 const client = mqtt.connect(MQTT_URL, {
   clientId: `simulator-${Math.random().toString(16).slice(2, 8)}`,
   will: { topic: `${TOPIC_PREFIX}/${machines[0].id}/status`, payload: 'offline', retain: true },
+  // Broker privé : identifiant / mot de passe (vides = broker public)
+  username: process.env.MQTT_USERNAME || undefined,
+  password: process.env.MQTT_PASSWORD || undefined,
 });
 
 client.on('connect', () => {

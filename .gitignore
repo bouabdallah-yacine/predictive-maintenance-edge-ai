@@ -7,3 +7,4 @@ firmware/stm32/test/test_protocol
 Debug/
 Release/
 .DS_Store
+secrets.h

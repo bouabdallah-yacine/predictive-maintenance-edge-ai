@@ -28,6 +28,9 @@ if (!DRY) {
   mqttClient = mqtt.connect(MQTT_URL, {
     clientId: `gw-${DEVICE}-${Math.random().toString(16).slice(2, 6)}`,
     will: { topic: `${PREFIX}/${DEVICE}/status`, payload: 'offline', retain: true },
+    // Broker privé : identifiant / mot de passe (vides = broker public)
+    username: process.env.MQTT_USERNAME || undefined,
+    password: process.env.MQTT_PASSWORD || undefined,
   });
   mqttClient.on('connect', () => {
     console.log(`[MQTT] connecté à ${MQTT_URL} → ${PREFIX}/${DEVICE}/telemetry`);
