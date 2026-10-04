@@ -69,6 +69,10 @@ static inline uint8_t tinyml_explain(float temp, float rms, float peak, float cu
     float s = tinyml_score(temp, rms, peak, c);
     if (s < best[TINYML_CAUSE_CURRENT]) best[TINYML_CAUSE_CURRENT] = s;
   }
+  // Priorité température > vibration > courant : on retient la première grandeur
+  // qui, corrigée seule, ramène la machine dans la zone normale ; sinon la meilleure.
+  for (uint8_t k = TINYML_CAUSE_TEMP; k <= TINYML_CAUSE_CURRENT; k++)
+    if (best[k] < TINYML_THRESHOLD * 0.6f) return k;
   uint8_t cause = TINYML_CAUSE_TEMP;
   for (uint8_t k = TINYML_CAUSE_VIB; k <= TINYML_CAUSE_CURRENT; k++)
     if (best[k] < best[cause]) cause = k;
