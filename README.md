@@ -156,10 +156,10 @@ Aussi : `<prefix>/<id>/status` (`online` / `offline`, retenu + Last Will) et `<p
 | Mode | Broker | Chiffrement | Authentification |
 |---|---|---|---|
 | Démo (par défaut) | `broker.hivemq.com` public | ❌ | ❌ |
-| **Production** | **HiveMQ Cloud privé** | ✅ TLS 1.2, port 8883, certificat ISRG Root X1 vérifié par l'ESP32 | ✅ identifiant / mot de passe |
+| **Production** | **EMQX Cloud Serverless** (ou HiveMQ Cloud) privé | ✅ TLS 1.2, port 8883, certificat racine vérifié par l'ESP32 | ✅ identifiant / mot de passe |
 
 - Firmwares ESP32 : copier `include/secrets.example.h` en `include/secrets.h` (exclu de Git) et le remplir.
-- Backend : `MQTT_URL=mqtts://<cluster>.hivemq.cloud:8883`, `MQTT_USERNAME`, `MQTT_PASSWORD` dans `.env`.
+- Backend : `MQTT_URL=mqtts://<adresse-du-broker>:8883`, `MQTT_USERNAME`, `MQTT_PASSWORD` dans `.env`.
 - Les secrets (`.env`, `secrets.h`, token Telegram) ne sont jamais versionnés.
 
 ## 🗺️ Évolutions possibles
