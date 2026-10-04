@@ -38,12 +38,14 @@ HI = np.array([100.0, 8.0, np.log10(1.51), np.log10(3.01)])
 scale = lambda f: (np.clip(f, LO, HI) - LO) / (HI - LO) * 2 - 1   # → [-1, 1]
 
 def normal_data(n):
-    ambient = rng.uniform(10, 35, n)                      # °C, atelier
+    ambient = rng.uniform(10, 38, n)                      # °C, atelier
     current = np.abs(4.0 * rng.uniform(0, 1, n) ** 0.7 + rng.normal(0, 0.05, n))
     temp = ambient + 1.8 * current**2 + rng.normal(0, 0.8, n)   # échauffement ∝ I²
     still = rng.random(n) < 0.3                           # à l'arrêt : vibration ≈ 0
-    rms = np.where(still, rng.uniform(0, 0.005, n), rng.uniform(0.01, 0.12, n) + 0.02 * current)
-    peak = rms * rng.uniform(1.3, 1.9, n)                 # facteur de crête sain
+    rms = np.where(still, rng.uniform(0, 0.01, n), rng.uniform(0.01, 0.12, n) + 0.02 * current)
+    crest = np.where(still, rng.uniform(1.0, 4.0, n),     # bruit du capteur à l'arrêt
+                     rng.uniform(1.3, 1.9, n))            # facteur de crête sain en marche
+    peak = rms * crest
     return scale(features(temp, rms, peak, current))
 
 def background(n):
