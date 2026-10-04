@@ -20,7 +20,7 @@ Les seuils regardent chaque grandeur **séparément**. L'IA regarde la **combina
    normal (échauffement ∝ courant², vibration liée à la charge, facteur de crête sain).
 2. **Entraînement** (`train_model.py`, NumPy seulement) : le réseau apprend à distinguer ces
    mesures normales de mesures tirées au hasard : il apprend la *forme* de la zone normale.
-   Seuil : 0,5 → **0,01 % de fausses alertes** sur des données normales jamais vues.
+   Seuil : 0,5 → **0,04 % de fausses alertes** sur des données normales jamais vues.
 3. **Export** : les poids sont écrits en C dans `tinyml_model.h`.
 4. **Inférence** (`tinyml.h`, C pur, sans bibliothèque) : ≈ 600 multiplications par mesure.
    Anti-rebond (3 mesures consécutives) et **explication** : la grandeur qui, ramenée à une
