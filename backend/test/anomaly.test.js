@@ -59,3 +59,11 @@ test('prédictif : montée de température → ETA avant surchauffe', () => {
   assert.ok(pred, 'alerte prédictive émise');
   assert.ok(r.etaCriticalMin > 5 && r.etaCriticalMin < 15, `eta=${r.etaCriticalMin}`);
 });
+
+test('prédictif : pas d\'alerte après un saut brutal au-dessus du seuil', () => {
+  const a = new MachineAnalyzer();
+  for (let i = 0; i < 30; i++) a.analyze(normal(i));
+  let events = [];
+  for (let i = 0; i < 5; i++) events = events.concat(a.analyze({ ...normal(30 + i), temperature: 63 }).events);
+  assert.equal(events.filter((e) => e.kind === 'PREDICTIVE').length, 0);
+});

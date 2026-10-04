@@ -140,9 +140,10 @@ export class MachineAnalyzer {
     let etaCriticalMin = null;
     const ts = this.stats.temperature;
     const slopePerSec = ts.slope() / this.sampleSec;
-    if (slopePerSec > 0.005 && typeof sample.temperature === 'number' && sample.temperature < THRESHOLDS.temperature.crit) {
+    // Prédiction utile seulement AVANT le seuil d'alerte (pas après un saut brutal)
+    if (slopePerSec > 0.005 && typeof sample.temperature === 'number' && sample.temperature < THRESHOLDS.temperature.warn) {
       etaCriticalMin = Math.round(((THRESHOLDS.temperature.crit - sample.temperature) / slopePerSec) / 60 * 10) / 10;
-      const trending = etaCriticalMin < 15;
+      const trending = etaCriticalMin >= 1 && etaCriticalMin < 15;
       if (trending && !this.prevTrend) {
         events.push({
           kind: 'PREDICTIVE', metric: 'temperature', severity: 'WARNING', value: sample.temperature,
