@@ -85,6 +85,7 @@ export default function App() {
         <div className="conn">
           <Dot ok={conn.socket} label="Serveur" />
           <Dot ok={conn.broker} label="Broker MQTT" />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -115,9 +116,9 @@ export default function App() {
 
       <main className="grid">
         <div className="charts">
-          <MetricChart title="Température" unit="°C" data={data} dataKey="temperature" color="#f59e0b" th={thresholds.temperature} />
-          <MetricChart title="Vibration RMS" unit="g" data={data} dataKey="vibRms" color="#38bdf8" th={thresholds.vibRms} secondKey="vibPeak" />
-          <MetricChart title="Courant moteur" unit="A" data={data} dataKey="current" color="#a78bfa" th={thresholds.current} />
+          <MetricChart title="Température" unit="°C" data={data} dataKey="temperature" color="var(--c-temp)" th={thresholds.temperature} />
+          <MetricChart title="Vibration RMS" unit="g" data={data} dataKey="vibRms" color="var(--c-vib)" th={thresholds.vibRms} secondKey="vibPeak" />
+          <MetricChart title="Courant moteur" unit="A" data={data} dataKey="current" color="var(--c-cur)" th={thresholds.current} />
         </div>
 
         <aside className="side">
@@ -152,6 +153,23 @@ function toPoint(t) {
     state: t.state,
     aiScore: t.aiScore,
   };
+}
+
+// Thème clair / sombre : suit le système, le bouton force l'un ou l'autre (mémorisé)
+function ThemeToggle() {
+  const sys = () => (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('theme') || sys(); } catch { return sys(); }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('theme', theme); } catch { /* navigation privée */ }
+  }, [theme]);
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button id="theme" onClick={() => setTheme(next)} title={next === 'light' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+            aria-label="Changer de thème">{theme === 'dark' ? '☀' : '☾'}</button>
+  );
 }
 
 function Dot({ ok, label }) {

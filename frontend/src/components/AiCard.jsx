@@ -33,7 +33,7 @@ export default function AiCard({ last, data }) {
           <ResponsiveContainer width="100%" height={48}>
             <AreaChart data={data.slice(-120)} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
               <YAxis hide domain={[0, 1]} />
-              <ReferenceLine y={0.5} stroke="#f59e0b" strokeDasharray="3 3" />
+              <ReferenceLine y={0.5} stroke="var(--warn)" strokeDasharray="3 3" />
               <Area type="monotone" dataKey="aiScore" stroke="currentColor" fill="currentColor" fillOpacity={0.15}
                     strokeWidth={1.5} dot={false} isAnimationActive={false} />
             </AreaChart>

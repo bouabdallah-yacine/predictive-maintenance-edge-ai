@@ -19,10 +19,10 @@ export default function MetricChart({ title, unit, data, dataKey, color, th, sec
           <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} tickFormatter={fmtTime}
                  stroke="var(--muted)" fontSize={11} minTickGap={40} />
           <YAxis stroke="var(--muted)" fontSize={11} domain={[0, Math.ceil(maxV * 10) / 10]} />
-          <ReferenceArea y1={th.warn} y2={th.crit} fill="#f59e0b" fillOpacity={0.07} />
-          <ReferenceArea y1={th.crit} y2={maxV * 2} fill="#ef4444" fillOpacity={0.08} />
-          <ReferenceLine y={th.warn} stroke="#f59e0b" strokeDasharray="4 4" />
-          <ReferenceLine y={th.crit} stroke="#ef4444" strokeDasharray="4 4" />
+          <ReferenceArea y1={th.warn} y2={th.crit} fill="var(--warn)" fillOpacity={0.07} />
+          <ReferenceArea y1={th.crit} y2={maxV * 2} fill="var(--crit)" fillOpacity={0.08} />
+          <ReferenceLine y={th.warn} stroke="var(--warn)" strokeDasharray="4 4" />
+          <ReferenceLine y={th.crit} stroke="var(--crit)" strokeDasharray="4 4" />
           <Tooltip labelFormatter={fmtTime}
                    formatter={(v, name) => [`${v} ${unit}`, name]}
                    contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }} />
