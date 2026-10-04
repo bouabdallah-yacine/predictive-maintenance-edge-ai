@@ -3,51 +3,267 @@
   "author": "Machine Monitor PFE",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-st-nucleo-c031c6", "id": "stm", "top": 0, "left": 0, "attrs": {} },
-    { "type": "wokwi-dht22", "id": "dht1", "top": -150, "left": -160, "attrs": { "temperature": "28", "humidity": "45" } },
-    { "type": "wokwi-mpu6050", "id": "imu1", "top": -150, "left": 260, "attrs": {} },
-    { "type": "wokwi-potentiometer", "id": "pot1", "top": 260, "left": -190, "attrs": { "value": "512" } },
-    { "type": "wokwi-led", "id": "led_ok", "top": 360, "left": 120, "attrs": { "color": "green" } },
-    { "type": "wokwi-led", "id": "led_warn", "top": 360, "left": 170, "attrs": { "color": "yellow" } },
-    { "type": "wokwi-led", "id": "led_alarm", "top": 360, "left": 220, "attrs": { "color": "red" } },
-    { "type": "wokwi-resistor", "id": "r1", "top": 440, "left": 110, "rotate": 90, "attrs": { "value": "220" } },
-    { "type": "wokwi-resistor", "id": "r2", "top": 440, "left": 160, "rotate": 90, "attrs": { "value": "220" } },
-    { "type": "wokwi-resistor", "id": "r3", "top": 440, "left": 210, "rotate": 90, "attrs": { "value": "220" } },
-    { "type": "wokwi-buzzer", "id": "bz1", "top": 340, "left": 300, "attrs": { "volume": "0.1" } },
-    { "type": "wokwi-pushbutton", "id": "btn1", "top": 120, "left": -240, "attrs": { "color": "red", "label": "Panne" } }
+    {
+      "type": "board-st-nucleo-c031c6",
+      "id": "stm",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ntc-temperature-sensor",
+      "id": "ntc1",
+      "top": -150,
+      "left": -160,
+      "attrs": {
+        "temperature": "28",
+        "beta": "3950"
+      }
+    },
+    {
+      "type": "wokwi-mpu6050",
+      "id": "imu1",
+      "top": -150,
+      "left": 260,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot1",
+      "top": 260,
+      "left": -190,
+      "attrs": {
+        "value": "512"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_ok",
+      "top": 360,
+      "left": 120,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_warn",
+      "top": 360,
+      "left": 170,
+      "attrs": {
+        "color": "yellow"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_alarm",
+      "top": 360,
+      "left": 220,
+      "attrs": {
+        "color": "red"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 440,
+      "left": 110,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 440,
+      "left": 160,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": 440,
+      "left": 210,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": 340,
+      "left": 300,
+      "attrs": {
+        "volume": "0.1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": 120,
+      "left": -240,
+      "attrs": {
+        "color": "red",
+        "label": "Panne"
+      }
+    }
   ],
   "connections": [
-    [ "stm:PA2", "$serialMonitor:RX", "", [] ],
-    [ "stm:PA3", "$serialMonitor:TX", "", [] ],
-
-    [ "dht1:VCC", "stm:3V3.1", "red", [] ],
-    [ "dht1:GND", "stm:GND.1", "black", [] ],
-    [ "dht1:SDA", "stm:PA1", "green", [] ],
-
-    [ "imu1:VCC", "stm:3V3.2", "red", [] ],
-    [ "imu1:GND", "stm:GND.2", "black", [] ],
-    [ "imu1:SDA", "stm:PB9", "blue", [] ],
-    [ "imu1:SCL", "stm:PB8", "orange", [] ],
-
-    [ "pot1:VCC", "stm:3V3.1", "red", [] ],
-    [ "pot1:GND", "stm:GND.3", "black", [] ],
-    [ "pot1:SIG", "stm:PA0", "violet", [] ],
-
-    [ "led_ok:A", "stm:PB13", "green", [] ],
-    [ "led_warn:A", "stm:PB14", "gold", [] ],
-    [ "led_alarm:A", "stm:PB15", "red", [] ],
-    [ "led_ok:C", "r1:1", "black", [] ],
-    [ "led_warn:C", "r2:1", "black", [] ],
-    [ "led_alarm:C", "r3:1", "black", [] ],
-    [ "r1:2", "stm:GND.8", "black", [] ],
-    [ "r2:2", "stm:GND.8", "black", [] ],
-    [ "r3:2", "stm:GND.8", "black", [] ],
-
-    [ "bz1:2", "stm:PB10", "purple", [] ],
-    [ "bz1:1", "stm:GND.9", "black", [] ],
-
-    [ "btn1:1.l", "stm:PB11", "gray", [] ],
-    [ "btn1:2.l", "stm:GND.4", "black", [] ]
+    [
+      "stm:PA2",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "stm:PA3",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "ntc1:VCC",
+      "stm:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "ntc1:GND",
+      "stm:GND.1",
+      "black",
+      []
+    ],
+    [
+      "ntc1:OUT",
+      "stm:PA1",
+      "green",
+      []
+    ],
+    [
+      "imu1:VCC",
+      "stm:3V3.2",
+      "red",
+      []
+    ],
+    [
+      "imu1:GND",
+      "stm:GND.2",
+      "black",
+      []
+    ],
+    [
+      "imu1:SDA",
+      "stm:PB9",
+      "blue",
+      []
+    ],
+    [
+      "imu1:SCL",
+      "stm:PB8",
+      "orange",
+      []
+    ],
+    [
+      "pot1:VCC",
+      "stm:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "pot1:GND",
+      "stm:GND.3",
+      "black",
+      []
+    ],
+    [
+      "pot1:SIG",
+      "stm:PA0",
+      "violet",
+      []
+    ],
+    [
+      "led_ok:A",
+      "stm:PB13",
+      "green",
+      []
+    ],
+    [
+      "led_warn:A",
+      "stm:PB14",
+      "gold",
+      []
+    ],
+    [
+      "led_alarm:A",
+      "stm:PB15",
+      "red",
+      []
+    ],
+    [
+      "led_ok:C",
+      "r1:1",
+      "black",
+      []
+    ],
+    [
+      "led_warn:C",
+      "r2:1",
+      "black",
+      []
+    ],
+    [
+      "led_alarm:C",
+      "r3:1",
+      "black",
+      []
+    ],
+    [
+      "r1:2",
+      "stm:GND.8",
+      "black",
+      []
+    ],
+    [
+      "r2:2",
+      "stm:GND.8",
+      "black",
+      []
+    ],
+    [
+      "r3:2",
+      "stm:GND.8",
+      "black",
+      []
+    ],
+    [
+      "bz1:2",
+      "stm:PB10",
+      "purple",
+      []
+    ],
+    [
+      "bz1:1",
+      "stm:GND.9",
+      "black",
+      []
+    ],
+    [
+      "btn1:1.l",
+      "stm:PB11",
+      "gray",
+      []
+    ],
+    [
+      "btn1:2.l",
+      "stm:GND.4",
+      "black",
+      []
+    ]
   ],
   "dependencies": {}
 }

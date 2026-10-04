@@ -14,7 +14,7 @@ d'alerte et envoient une trame UART par seconde.
 ## Brochage
 | Élément | Broche STM32 | Périphérique |
 |---|---|---|
-| DHT22 | PA1 | GPIO (timing µs) |
+| Thermistance NTC 10 kΩ (température moteur) | PA1 | ADC canal 1 (table précalculée) |
 | MPU6050 | PB8 SCL / PB9 SDA | I2C1 |
 | Potentiomètre (ACS712) | PA0 | ADC canal 0 |
 | LEDs vert/jaune/rouge | PB13 / PB14 / PB15 | GPIO |
@@ -26,7 +26,7 @@ d'alerte et envoient une trame UART par seconde.
 | Tâche | Priorité | Période | Rôle |
 |---|---|---|---|
 | VibTask | 4 | 10 ms | lit le MPU6050, RMS sur 1 s |
-| EnvTask | 3 | 2 s | DHT22 + courant (moyenne 32 échantillons ADC) |
+| EnvTask | 3 | 500 ms | température NTC + courant (moyennes ADC) |
 | AnalysisTask | 3 | 1 s | niveaux, LEDs, buzzer, trame → file |
 | CommTask | 3 | événement | envoie les trames, reçoit les commandes F1/F0 |
 
@@ -36,3 +36,8 @@ notification de tâche depuis l'ISR du bouton.
 Pourquoi la Nucleo-C031C6 et pas la Blue Pill ? Dans le simulateur Wokwi, le démarrage
 de FreeRTOS sur la Blue Pill (Cortex-M3) bloquait ; la Nucleo C031 (Cortex-M0+) est la
 carte STM32 utilisée par les projets FreeRTOS de référence sur Wokwi.
+
+Pourquoi une NTC plutôt qu'un DHT22 sur ce nœud ? Le DHT22 utilise un protocole à
+timing microseconde qui échouait aléatoirement dans le simulateur sur cette carte.
+La thermistance NTC, lue par l'ADC, est aussi plus réaliste : c'est la sonde montée
+dans les bobinages des moteurs industriels. (Le nœud ESP32 garde son DHT22.)

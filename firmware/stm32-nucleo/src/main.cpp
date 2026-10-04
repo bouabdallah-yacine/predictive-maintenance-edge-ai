@@ -12,13 +12,15 @@
  *                                     LEDs verte/jaune/rouge + BuzzerTask
  *
  *  Câblage (diagram.json) :
- *    DHT22 → PA1 | MPU6050 → I2C logiciel (PB8 SCL, PB9 SDA) | Potentiomètre (ACS712) → PA0
+ *    NTC (température moteur) → PA1 | MPU6050 → I2C logiciel (PB8 SCL, PB9 SDA)
+ *    Potentiomètre (ACS712) → PA0
  *    LEDs PB13/PB14/PB15 | Buzzer PB10 | Bouton "Panne" PB11 | USART2 PA2 TX / PA3 RX
  *
  *  Optimisé pour 32 Ko de flash / 12 Ko de RAM :
  *   - aucun calcul flottant (le Cortex-M0+ n'a pas de FPU) ;
- *   - pilotes minimaux écrits à la main (DHT22, I2C, buzzer) au lieu de
+ *   - pilotes minimaux écrits à la main (I2C, buzzer) au lieu de
  *     bibliothèques génériques ;
+ *   - température NTC convertie par table précalculée (pas de log/exp) ;
  *   - encodeur de trame sans printf (protocol.c).
  *
  *  Chaque seconde, une trame est envoyée sur USART2 (format dans protocol.h) :
@@ -31,7 +33,7 @@
 #include "protocol.h"
 
 // ---------------------------------------------------------------- Brochage
-#define PIN_DHT        PA1
+#define PIN_TEMP       PA1      // thermistance NTC (entrée analogique)
 #define PIN_CURRENT    PA0
 #define PIN_SCL        PB8
 #define PIN_SDA        PB9
@@ -196,64 +198,36 @@ static int32_t mpuReadMagnitudeMg() {
 }
 
 // ============================================================================
-//  DHT22 : protocole 1 fil propriétaire, décodé sans timer.
-//  On compte les tours de boucle de chaque impulsion : pour chaque bit, une
-//  impulsion haute plus longue que la basse (≈70 µs vs 50 µs) vaut 1,
-//  plus courte (≈26 µs) vaut 0. Résultat en entiers (dixièmes).
+//  Température moteur : thermistance NTC 10 kΩ (B = 3950) lue par l'ADC.
+//  C'est le capteur utilisé dans les bobinages de moteurs industriels.
+//  Conversion tension → température par TABLE PRÉCALCULÉE + interpolation
+//  linéaire : aucun calcul flottant (pas de log/exp sur Cortex-M0+).
+//  Table générée hors ligne : adc = 4095·r/(1+r), r = exp(B·(1/T − 1/298,15))
 // ============================================================================
-#define PULSE_TIMEOUT 0xFFFF
+#define NTC_T_MIN   (-40)          // °C, première entrée de la table
+#define NTC_T_STEP  5              // °C entre deux entrées
+static const uint16_t NTC_TABLE[] = {
+  3996, 3955, 3900, 3830, 3740, 3629, 3495, 3337, 3156, 2955, 2738, 2510,
+  2278, 2048, 1825, 1614, 1419, 1241, 1081,  940,  815,  707,  613,  532,
+   462,  401,  350,  305,  267,  234,  206,  181,  160,  142 };   // −40 … 125 °C
+#define NTC_N (sizeof(NTC_TABLE) / sizeof(NTC_TABLE[0]))
 
-// Compte les tours de boucle tant que la ligne reste au niveau `level`
-static uint16_t pulseCount(int level) {
-  uint16_t n = 0;
-  while (digitalRead(PIN_DHT) == level) {
-    if (++n == PULSE_TIMEOUT) return PULSE_TIMEOUT;   // délai dépassé
+// Renvoie true si la mesure est plausible ; température en dixièmes de °C
+static bool ntcReadTempD(int16_t *temp_d) {
+  uint32_t sum = 0;
+  for (int i = 0; i < 16; i++) sum += analogRead(PIN_TEMP);
+  uint32_t adc = sum / 16;
+  if (adc > NTC_TABLE[0] || adc < NTC_TABLE[NTC_N - 1]) return false;   // capteur absent / hors plage
+  for (uint32_t i = 0; i + 1 < NTC_N; i++) {
+    if (adc <= NTC_TABLE[i] && adc >= NTC_TABLE[i + 1]) {
+      int32_t span = NTC_TABLE[i] - NTC_TABLE[i + 1];
+      int32_t t = (NTC_T_MIN + (int32_t)i * NTC_T_STEP) * 10
+                + (int32_t)(NTC_TABLE[i] - adc) * NTC_T_STEP * 10 / span;
+      *temp_d = (int16_t)t;
+      return true;
+    }
   }
-  return n;
-}
-
-// Renvoie 0 si OK, sinon le numéro de l'étape qui a échoué (diagnostic) :
-//  1 = pas de réponse du capteur, 2/3 = réponse 80 µs incomplète,
-//  10+n = bit n incomplet, 99 = somme de contrôle fausse
-static int dhtRead(int16_t *temp_d, uint16_t *hum_d) {
-  uint16_t cycles[80];
-  uint8_t data[5] = {0};
-
-  // Signal de départ : ligne à 0 pendant ≥ 1 ms
-  pinMode(PIN_DHT, OUTPUT);
-  digitalWrite(PIN_DHT, LOW);
-  vTaskDelay(pdMS_TO_TICKS(2));
-
-  // Lecture ≈ 5 ms protégée AVANT de relâcher la ligne :
-  //  - vTaskSuspendAll() : aucune autre tâche ne peut prendre la main
-  //    (ex. VibTask qui occupe ~1 ms toutes les 10 ms) ;
-  //  - section critique : pas d'interruption non plus.
-  int err = 0;
-  vTaskSuspendAll();
-  taskENTER_CRITICAL();
-  pinMode(PIN_DHT, INPUT_PULLUP);
-  if (pulseCount(HIGH) == PULSE_TIMEOUT) err = 1;              // attente de la réponse (20–40 µs)
-  if (!err && pulseCount(LOW)  == PULSE_TIMEOUT) err = 2;      // réponse : 80 µs à 0
-  if (!err && pulseCount(HIGH) == PULSE_TIMEOUT) err = 3;      //           80 µs à 1
-  for (int i = 0; !err && i < 80; i += 2) {
-    cycles[i]     = pulseCount(LOW);                           // ≈ 50 µs
-    cycles[i + 1] = pulseCount(HIGH);                          // 26 µs (0) ou 70 µs (1)
-    if (cycles[i] == PULSE_TIMEOUT || cycles[i + 1] == PULSE_TIMEOUT) err = 10 + i / 2;
-  }
-  taskEXIT_CRITICAL();
-  xTaskResumeAll();
-  if (err) return err;
-
-  for (int i = 0; i < 40; i++) {
-    data[i / 8] <<= 1;
-    if (cycles[2 * i + 1] > cycles[2 * i]) data[i / 8] |= 1;
-  }
-  if ((uint8_t)(data[0] + data[1] + data[2] + data[3]) != data[4]) return 99;
-
-  *hum_d = (uint16_t)((data[0] << 8) | data[1]);
-  int16_t t = (int16_t)(((data[2] & 0x7F) << 8) | data[3]);
-  *temp_d = (data[2] & 0x80) ? (int16_t)-t : t;
-  return 0;
+  return false;
 }
 
 // ============================================================================
@@ -303,7 +277,7 @@ static void VibTask(void *) {
 }
 
 // ============================================================================
-//  EnvTask : DHT22 (toutes les 2 s) + courant ACS712 (ADC, moyenne de 32)
+//  EnvTask : température NTC + courant ACS712 (ADC), toutes les 500 ms
 // ============================================================================
 static void EnvTask(void *) {
   Link.println("# tache env demarree");
@@ -317,31 +291,16 @@ static void EnvTask(void *) {
     if (ma > 65535) ma = 65535;
 
     int16_t t = 0;
-    uint16_t h = 0;
-    static int lastErr = -1;
-    int err = dhtRead(&t, &h);
-    if (err) {                                       // une seconde chance
-      vTaskDelay(pdMS_TO_TICKS(50));
-      err = dhtRead(&t, &h);
-    }
-    bool dhtOk = (err == 0);
-    if (err != lastErr) {                            // trace uniquement les changements
-      Link.print("# DHT22 ");
-      if (dhtOk) Link.println("OK");
-      else { Link.print("erreur etape "); Link.println(err); }
-      lastErr = err;
-    }
+    bool tempOk = ntcReadTempD(&t);
 
     xSemaphoreTake(measureMutex, portMAX_DELAY);
     g_measure.curr_ma = (uint16_t)ma;
-    g_measure.dht_ok  = dhtOk;
-    if (dhtOk) {
-      g_measure.temp_d = (int16_t)(t + (g_fault ? 350 : 0));
-      g_measure.hum_d  = h;
-    }
+    g_measure.dht_ok  = tempOk;                      // bit "capteur température OK"
+    if (tempOk) g_measure.temp_d = (int16_t)(t + (g_fault ? 350 : 0));
+    g_measure.hum_d   = 0;                           // pas d'humidité sur ce nœud
     xSemaphoreGive(measureMutex);
 
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
 
@@ -468,8 +427,7 @@ void setup() {
   i2cBegin();
   g_mpuOk = mpuInit();
   Link.println(g_mpuOk ? "# MPU6050 OK" : "# MPU6050 absent (vibration desactivee)");
-  pinMode(PIN_DHT, INPUT_PULLUP);
-  Link.println("# DHT22 pret");
+  Link.println("# capteur temperature NTC pret");
 
   measureMutex = xSemaphoreCreateMutex();            // mutex avec héritage de priorité
   frameQueue   = xQueueCreate(4, sizeof(proto_frame_t));
