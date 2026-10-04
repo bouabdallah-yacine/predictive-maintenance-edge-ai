@@ -11,6 +11,7 @@ import { Server as SocketServer } from 'socket.io';
 import { createStore } from './store.js';
 import { MachineAnalyzer, THRESHOLDS } from './anomaly.js';
 import { notify, telegramEnabled, checkTelegram } from './notify.js';
+import { parseAi, aiEvent } from './edgeAi.js';
 
 const PORT         = Number(process.env.PORT ?? 4000);
 const MQTT_URL     = process.env.MQTT_URL ?? 'mqtt://broker.hivemq.com:1883';
@@ -23,6 +24,7 @@ const OFFLINE_SEC  = Number(process.env.OFFLINE_SEC ?? 10);
 const store = await createStore(MONGO_URL);
 const analyzers = new Map();          // deviceId → MachineAnalyzer
 const devices = new Map();            // deviceId → { lastSeen, online, last }
+const aiState = new Map();            // deviceId → dernière anomalie IA (true/false)
 
 const app = express();
 app.use(cors());
@@ -104,6 +106,8 @@ async function handleTelemetry(deviceId, msg) {
     deviceState: msg.state,
     faultInjected: Boolean(msg.faultInjected),
   };
+  const ai = parseAi(msg.ai);               // verdict de l'IA embarquée (ESP32)
+  if (ai) Object.assign(sample, { aiScore: ai.score, aiAnomaly: ai.anomaly, aiCause: ai.cause });
 
   if (!analyzers.has(deviceId)) analyzers.set(deviceId, new MachineAnalyzer());
   const result = analyzers.get(deviceId).analyze(sample);
@@ -115,7 +119,12 @@ async function handleTelemetry(deviceId, msg) {
 
   io.emit('telemetry', { ...saved, levels: result.levels, etaCriticalMin: result.etaCriticalMin });
 
-  for (const ev of result.events) {
+  const events = [...result.events];
+  const aiEv = aiEvent(aiState.get(deviceId), ai);
+  if (ai) aiState.set(deviceId, ai.anomaly);
+  if (aiEv) events.push(aiEv);
+
+  for (const ev of events) {
     const alert = await store.saveAlert({ deviceId, ts: new Date(), ...ev });
     io.emit('alert', alert);
     notify(alert);
@@ -207,7 +216,7 @@ app.get('/api/export.csv', async (req, res) => {
   const rows = await store.queryTelemetry({
     deviceId: req.query.deviceId, since: new Date(Date.now() - minutes * 60_000), limit: 100000,
   });
-  const cols = ['ts', 'deviceId', 'temperature', 'humidity', 'vibRms', 'vibPeak', 'current', 'state'];
+  const cols = ['ts', 'deviceId', 'temperature', 'humidity', 'vibRms', 'vibPeak', 'current', 'state', 'aiScore'];
   const csv = [cols.join(';')]
     .concat(rows.map((r) => cols.map((c) => (c === 'ts' ? new Date(r.ts).toISOString() : r[c] ?? '')).join(';')))
     .join('\n');

@@ -30,6 +30,15 @@ jobs:
       - run: gcc -Wall -Wextra -Werror -I../Core/Inc test_protocol.c ../Core/Src/protocol.c -o test_protocol
       - run: ./test_protocol
 
+  tinyml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install numpy && python ai/train_model.py      # entraîne + génère le modèle C
+      - run: gcc -O2 -Wall -Wextra -Werror -I ai ai/test_tinyml.c -lm -o t && ./t   # C == Python
+
   esp32:
     runs-on: ubuntu-latest
     steps:
@@ -42,14 +51,14 @@ jobs:
           arduino-cli core install esp32:esp32
           arduino-cli lib install PubSubClient ArduinoJson "DHT sensor library for ESPx" "Adafruit MPU6050" "Adafruit Unified Sensor" "Adafruit GFX Library" "Adafruit SSD1306"
       # arduino-cli exige que le .ino porte le nom du dossier (Wokwi impose sketch.ino)
-      - run: mkdir -p /tmp/sketch && cp firmware/esp32-wokwi/sketch.ino /tmp/sketch/ && arduino-cli compile --fqbn esp32:esp32:esp32 /tmp/sketch
+      - run: mkdir -p /tmp/sketch && cp firmware/esp32-wokwi/sketch.ino firmware/esp32-wokwi/*.h /tmp/sketch/ && arduino-cli compile --fqbn esp32:esp32:esp32 /tmp/sketch
       - run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32-bridge
 
   platformio:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [firmware/esp32-vscode, firmware/stm32-nucleo]
+        project: [firmware/esp32-vscode, firmware/esp32-bridge-vscode, firmware/stm32-nucleo]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

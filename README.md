@@ -1,7 +1,8 @@
 # ⚙️ Machine Monitor : surveillance industrielle et détection d'anomalies
 
 Système IoT de **maintenance prédictive** : des capteurs surveillent une machine (température, vibration, courant),
-un microcontrôleur sous **FreeRTOS** détecte les dérives et un **dashboard web temps réel** affiche l'état et les alertes.
+un microcontrôleur sous **FreeRTOS** détecte les dérives, un **réseau de neurones embarqué (TinyML)** repère les
+comportements anormaux et un **dashboard web temps réel** affiche l'état et les alertes.
 
 > ✅ Projet **entièrement validé en simulation** (Wokwi, Renode, simulateur MQTT), conçu pour un portage direct sur matériel réel.
 
@@ -28,8 +29,8 @@ STM32 + FreeRTOS  ── trame UART "$MM,...*CS" ──►  ESP32 + FreeRTOS
 | Courant anormal | Moyenne ADC, seuils 3,5 / 4,5 A | 🚨 Possible failure |
 | Surchauffe à venir | **Régression linéaire** sur la température | 🔮 « Surchauffe dans ~N min » |
 | Machine déconnectée | **Last Will MQTT** + watchdog serveur | 📡 Hors ligne |
-
-| Alerte sur téléphone | Bot **Telegram** (critiques et prédictives, anti-spam 60 s) | 📱 Notification |
+| Combinaison anormale (ex. 45 °C sans charge) | **Réseau de neurones embarqué dans l'ESP32** (TinyML) | 🤖 Anomalie IA + cause probable |
+| Alerte sur téléphone | Bot **Telegram** (critiques, prédictives et IA, anti-spam 60 s) | 📱 Notification |
 
 Deux nœuds d'acquisition : **ESP32** (DHT22, MPU6050, ACS712, OLED) et **STM32 Nucleo-C031C6 sous FreeRTOS**
 (NTC, HIH-4030, MPU6050, ACS712) relié à un **ESP32 passerelle** par UART. Historique dans **MongoDB** (7 jours).
@@ -47,6 +48,7 @@ firmware/
 ├── esp32-bridge-vscode/ la même passerelle, en projet PlatformIO simulable sur Wokwi
 ├── esp32-vscode/     Projet PlatformIO de l'ESP32 pour Wokwi dans VS Code
 ├── stm32-nucleo/      STM32 Nucleo-C031C6 + FreeRTOS (PlatformIO) simulable sur Wokwi
+ai/                   IA embarquée : entraînement du réseau (NumPy) → code C pour l'ESP32
 └── stm32/            STM32 FreeRTOS (CMSIS-RTOS v2), pilotes capteurs, protocole UART, Renode
 gateway/              Passerelle Python UART/Renode → MQTT (remplace l'ESP32 en simulation)
 simulator/            Simulateur de machines (scénarios de pannes réalistes)
@@ -103,7 +105,7 @@ Par défaut tout passe par le broker public `broker.hivemq.com` : aucun Mosquitt
 ### Option 4 : STM32 Nucleo-C031C6 + FreeRTOS simulé sur Wokwi (VS Code)
 
 Ouvre `firmware/stm32-nucleo/` dans VS Code → PlatformIO **Build** → **F1 › Wokwi: Start Simulator**,
-puis dans `backend/` : `npm run stm32`. Wokwi expose l'UART du STM32 sur `localhost:4000`
+puis dans `backend/` : `npm run stm32`. Wokwi expose l'UART du STM32 sur `localhost:4100`
 (RFC2217) ; la passerelle décode les trames et les publie en MQTT (machine **stm32-01**).
 Les commandes « Injecter une panne » du dashboard redescendent jusqu'au STM32.
 
@@ -125,10 +127,22 @@ sous Renode, puis `python gateway/uart_gateway.py --tcp localhost:3456`.
 
 ---
 
+## 🤖 IA embarquée (TinyML)
+
+Un réseau de neurones de 369 poids (≈ 1,5 Ko) tourne **dans l'ESP32** et juge chaque mesure.
+Il détecte ce que les seuils ne voient pas : 45 °C alors que le moteur ne consomme rien
+(refroidissement en panne), température ambiante malgré 3 A (capteur défaillant), chocs de
+vibration (roulement). Détails, méthode et résultats : [`ai/README.md`](ai/README.md).
+
+**Démo dans Wokwi :** monte la température (NTC du STM32 ou DHT22 de l'ESP32) à **45 °C** :
+les seuils restent « Normal », mais l'IA signale une anomalie (cause : température) dans le
+dashboard et sur Telegram.
+
 ## 🧪 Tests
 
 ```bash
-cd backend && npm test                                  # détection d'anomalies (6 tests)
+cd backend && npm test                                  # anomalies, IA, trames, Telegram (17 tests)
+python ai/train_model.py && gcc -I ai ai/test_tinyml.c -lm -o t && ./t   # IA : C == Python
 cd firmware/stm32/test && gcc -Wall -Wextra -I../Core/Inc test_protocol.c ../Core/Src/protocol.c -o t && ./t
 python gateway/uart_gateway.py --stdin --dry-run < gateway/trames_exemple.txt
 ```
@@ -141,7 +155,8 @@ La CI GitHub Actions (`.github/workflows/ci.yml`) compile les deux firmwares ESP
 { "deviceId": "machine01", "seq": 128, "temperature": 42.3, "humidity": 45.1,
   "vibRms": 0.052, "vibPeak": 0.089, "current": 1.62, "state": "NORMAL",
   "levels": { "temperature": "NORMAL", "vibration": "NORMAL", "current": "NORMAL" },
-  "faultInjected": false, "health": { "dht": true, "mpu": true } }
+  "faultInjected": false, "health": { "dht": true, "mpu": true },
+  "ai": { "score": 0.002, "anomaly": false, "cause": "" } }
 ```
 Aussi : `<prefix>/<id>/status` (`online` / `offline`, retenu + Last Will) et `<prefix>/<id>/cmd`
 (`fault_on`, `fault_off`, `mute`, `unmute`).
@@ -165,9 +180,8 @@ Aussi : `<prefix>/<id>/status` (`online` / `offline`, retenu + Last Will) et `<p
 ## 🗺️ Évolutions possibles
 
 - FFT sur la vibration (ESP-DSP / CMSIS-DSP) pour identifier la fréquence du défaut
-- Modèle d'IA embarqué (Edge Impulse / TensorFlow Lite Micro) pour la détection d'anomalies
+- Entraînement de l'IA sur des données réelles de la machine (au lieu du modèle physique)
 - Droits d'accès par appareil (ACL), OTA pour le firmware ESP32
-- Notifications Telegram ou e-mail sur alerte critique
 
 ## Licence
 

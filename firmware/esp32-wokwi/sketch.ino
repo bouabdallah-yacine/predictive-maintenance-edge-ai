@@ -32,6 +32,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <math.h>
+#include "tinyml.h"     // IA embarquée (TinyML) : détection d'anomalies
 
 // ----------------------------------------------------------------------------
 //  Configuration (à adapter)
@@ -116,6 +117,9 @@ struct Telemetry {
   SensorData s;
   Level tempLvl, vibLvl, currLvl, global;
   bool faultInjected;
+  float   aiScore;       // IA embarquée : score d'anomalie 0..1
+  uint8_t aiAnomaly;     // anomalie confirmée par l'IA
+  uint8_t aiCause;       // TINYML_CAUSE_*
 };
 
 // ----------------------------------------------------------------------------
@@ -258,6 +262,7 @@ void taskEnvironment(void *) {
 // ----------------------------------------------------------------------------
 void taskAnalysis(void *) {
   uint32_t seq = 0;
+  tinyml_state_t ai = {};
   Level tL = LVL_NORMAL, vL = LVL_NORMAL, cL = LVL_NORMAL;
   TickType_t last = xTaskGetTickCount();
 
@@ -278,6 +283,15 @@ void taskAnalysis(void *) {
     t.tempLvl = tL; t.vibLvl = vL; t.currLvl = cL;
     t.global = (Level)max((int)tL, max((int)vL, (int)cL));
     t.faultInjected = g_faultMode;
+
+    // IA embarquée : le réseau de neurones juge si la combinaison des mesures
+    // ressemble à un fonctionnement normal (détecte ce que les seuils ratent)
+    if (t.s.dhtOk && tinyml_update(&ai, t.s.temperature, t.s.vibRms, t.s.vibPeak, t.s.current)) {
+      if (ai.anomaly) Serial.printf("[IA] anomalie detectee (cause probable : %s, score %.2f)\n",
+                                    TINYML_CAUSE_STR[ai.cause], ai.score);
+      else            Serial.println("[IA] retour au fonctionnement normal");
+    }
+    t.aiScore = ai.score; t.aiAnomaly = ai.anomaly; t.aiCause = ai.cause;
 
     // Actionneurs locaux : l'alarme fonctionne même sans réseau
     digitalWrite(PIN_LED_OK,    t.global == LVL_NORMAL);
@@ -339,7 +353,7 @@ void taskDisplay(void *) {
       oled.printf("Cour.: %5.2f A   %c\n", t.s.current, "OWC"[t.currLvl]);
       oled.setTextSize(1);
       oled.setCursor(0, 54);
-      oled.printf("Etat: %s", LEVEL_STR[t.global]);
+      oled.printf("Etat:%s IA:%s", LEVEL_STR[t.global], t.aiAnomaly ? "ANOM" : "ok");
       oled.display();
       xSemaphoreGive(i2cMutex);
     }
@@ -381,8 +395,12 @@ static bool publishTelemetry(const Telemetry &t) {
   JsonObject h = doc["health"].to<JsonObject>();
   h["dht"] = t.s.dhtOk;
   h["mpu"] = t.s.mpuOk;
+  JsonObject a = doc["ai"].to<JsonObject>();      // verdict de l'IA embarquée
+  a["score"]   = roundf(t.aiScore * 1000) / 1000;
+  a["anomaly"] = (bool)t.aiAnomaly;
+  a["cause"]   = TINYML_CAUSE_STR[t.aiCause];
 
-  char buf[400];
+  char buf[512];
   size_t n = serializeJson(doc, buf, sizeof(buf));
   return mqtt.publish(topicTelemetry, (const uint8_t *)buf, n, false);
 }
@@ -398,7 +416,7 @@ void taskMqtt(void *) {
 #endif
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);
-  mqtt.setBufferSize(512);
+  mqtt.setBufferSize(768);
 
   uint32_t backoffMs = 1000;
   for (;;) {

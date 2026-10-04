@@ -92,3 +92,15 @@ button.danger { background: #3a1212; border-color: #7f1d1d; }
 @media (max-width: 520px) {
   .kpis { grid-template-columns: 1fr; }
 }
+
+/* --- IA embarquée ------------------------------------------------------- */
+.ai { color: var(--accent); }
+.ai h3 { margin: 0; font-size: 14px; color: var(--text); }
+.ai.ai-ok { color: var(--ok); }
+.ai.ai-alert { color: var(--warn); border-color: #78350f; }
+.ai-score { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 6px; }
+.ai-score b { font-size: 28px; color: currentColor; }
+.ai-bar { position: relative; height: 8px; background: var(--grid); border-radius: 999px; overflow: visible; }
+.ai-bar span { display: block; height: 100%; background: currentColor; border-radius: 999px; transition: width .3s; }
+.ai-bar i { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--warn); }
+.ai-verdict { font-size: 13px; color: var(--text); margin: 10px 0 4px; }

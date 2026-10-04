@@ -12,9 +12,10 @@ const lastSent = new Map();
 
 const ICON = { CRITICAL: '🚨', WARNING: '⚠️', INFO: 'ℹ️' };
 
-/** Faut-il notifier cette alerte ? (critiques, prédictives, perte de connexion) */
+/** Faut-il notifier cette alerte ? (critiques, prédictives, IA, perte de connexion) */
 export function shouldNotify(alert) {
   if (alert.kind === 'PREDICTIVE') return true;
+  if (alert.kind === 'AI' && alert.severity !== 'INFO') return true;   // anomalie IA embarquée
   return alert.severity === 'CRITICAL';
 }
 

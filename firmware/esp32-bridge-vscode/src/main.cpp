@@ -16,8 +16,12 @@
  *  un seul code de protocole, testé une fois, utilisé des deux côtés.
  *
  *  Tâches FreeRTOS :
- *   - taskUart : lit l'UART, décode les trames, les pousse dans une file
+ *   - taskUart : lit l'UART, décode les trames, applique l'IA embarquée
+ *                (TinyML), pousse le résultat dans une file
  *   - taskMqtt : Wi-Fi + MQTT, publie le JSON, relaie les commandes au STM32
+ *
+ *  IA embarquée (« edge AI ») : un réseau de neurones (ai/train_model.py)
+ *  calcule pour chaque trame un score d'anomalie, directement sur l'ESP32.
  * ============================================================================
  */
 #include <Arduino.h>
@@ -25,6 +29,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "protocol.h"
+#include "tinyml.h"         // IA embarquée : détection d'anomalies
 
 #define WIFI_SSID     "Wokwi-GUEST"
 #define WIFI_PASS     ""
@@ -73,7 +78,16 @@ WiFiClientSecure net;   // TLS : connexion chiffrée + certificat vérifié
 WiFiClient net;
 #endif
 PubSubClient mqtt(net);
+// Une trame du STM32 + le verdict de l'IA embarquée
+struct Sample {
+  proto_frame_t f;
+  float   aiScore;
+  uint8_t aiAnomaly;
+  uint8_t aiCause;
+};
+
 QueueHandle_t frameQueue;
+tinyml_state_t ai = {};
 proto_parser_t parser;
 char topicTelemetry[64], topicStatus[64], topicCmd[64];
 
@@ -92,15 +106,32 @@ static void logLine(const char *s) {
 //  Réception UART : décodage octet par octet (parseur à états, avec checksum)
 // ---------------------------------------------------------------------------
 void taskUart(void *) {
-  proto_frame_t f;
+  Sample smp;
   for (;;) {
     while (LINK.available()) {
-      if (proto_parser_feed(&parser, (char)LINK.read(), &f)) {
+      if (proto_parser_feed(&parser, (char)LINK.read(), &smp.f)) {
+        const proto_frame_t &f = smp.f;
         digitalWrite(PIN_LED_RX, !digitalRead(PIN_LED_RX));
-        if (xQueueSend(frameQueue, &f, 0) != pdTRUE) {      // file pleine
-          proto_frame_t old;
+        // --- IA embarquée : score d'anomalie de cette mesure ---------------
+        if (f.flags & PROTO_FLAG_DHT_OK) {
+          if (tinyml_update(&ai, f.temp_d / 10.0f, f.vib_mg / 1000.0f,
+                            f.peak_mg / 1000.0f, f.curr_ma / 1000.0f)) {
+            char msg[80];
+            if (ai.anomaly)
+              snprintf(msg, sizeof msg, "IA: anomalie detectee (cause probable : %s, score %.2f)",
+                       TINYML_CAUSE_STR[ai.cause], ai.score);
+            else
+              snprintf(msg, sizeof msg, "IA: retour au fonctionnement normal");
+            logLine(msg);
+          }
+        }
+        smp.aiScore = ai.score;
+        smp.aiAnomaly = ai.anomaly;
+        smp.aiCause = ai.cause;
+        if (xQueueSend(frameQueue, &smp, 0) != pdTRUE) {    // file pleine
+          Sample old;
           xQueueReceive(frameQueue, &old, 0);
-          xQueueSend(frameQueue, &f, 0);
+          xQueueSend(frameQueue, &smp, 0);
         }
       }
     }
@@ -118,7 +149,8 @@ void onMqttMessage(char *, byte *payload, unsigned int len) {
   if (cmd == "fault_off") LINK.print("F0\n");
 }
 
-bool publishFrame(const proto_frame_t &f) {
+bool publishFrame(const Sample &smp) {
+  const proto_frame_t &f = smp.f;
   JsonDocument doc;
   doc["deviceId"]    = DEVICE_ID;
   doc["seq"]         = f.seq;
@@ -135,7 +167,11 @@ bool publishFrame(const proto_frame_t &f) {
   JsonObject h = doc["health"].to<JsonObject>();
   h["temp"] = (bool)(f.flags & PROTO_FLAG_DHT_OK);
   h["mpu"]  = (bool)(f.flags & PROTO_FLAG_MPU_OK);
-  char buf[320];
+  JsonObject a = doc["ai"].to<JsonObject>();      // verdict de l'IA embarquée
+  a["score"]   = roundf(smp.aiScore * 1000) / 1000;
+  a["anomaly"] = (bool)smp.aiAnomaly;
+  a["cause"]   = TINYML_CAUSE_STR[smp.aiCause];
+  char buf[400];
   size_t n = serializeJson(doc, buf, sizeof buf);
   return mqtt.publish(topicTelemetry, (const uint8_t *)buf, n, false);
 }
@@ -151,7 +187,7 @@ void taskMqtt(void *) {
 #endif
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqttMessage);
-  mqtt.setBufferSize(512);
+  mqtt.setBufferSize(768);
   bool wasConnected = false;
 
   for (;;) {
@@ -177,10 +213,10 @@ void taskMqtt(void *) {
       }
     }
     mqtt.loop();
-    proto_frame_t f;
-    while (mqtt.connected() && xQueuePeek(frameQueue, &f, 0) == pdTRUE) {
-      if (!publishFrame(f)) break;          // on garde la trame pour plus tard
-      xQueueReceive(frameQueue, &f, 0);
+    Sample smp;
+    while (mqtt.connected() && xQueuePeek(frameQueue, &smp, 0) == pdTRUE) {
+      if (!publishFrame(smp)) break;        // on garde la trame pour plus tard
+      xQueueReceive(frameQueue, &smp, 0);
     }
     vTaskDelay(pdMS_TO_TICKS(20));
   }
@@ -199,8 +235,8 @@ void setup() {
   snprintf(topicStatus,    sizeof topicStatus,    "%s/%s/status",    TOPIC_PREFIX, DEVICE_ID);
   snprintf(topicCmd,       sizeof topicCmd,       "%s/%s/cmd",       TOPIC_PREFIX, DEVICE_ID);
   proto_parser_init(&parser);
-  frameQueue = xQueueCreate(30, sizeof(proto_frame_t));
-  logLine("Passerelle STM32 -> MQTT demarree");
+  frameQueue = xQueueCreate(30, sizeof(Sample));
+  logLine("Passerelle STM32 -> MQTT demarree (IA embarquee TinyML active)");
   xTaskCreatePinnedToCore(taskUart, "uart", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(taskMqtt, "mqtt", 8192, NULL, 2, NULL, 0);
 }

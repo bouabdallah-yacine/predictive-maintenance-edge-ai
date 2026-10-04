@@ -16,6 +16,9 @@ const telemetrySchema = new mongoose.Schema({
   deviceState: String,          // état annoncé par le firmware
   zscores:     Object,
   faultInjected: Boolean,
+  aiScore:     Number,          // IA embarquée : score d'anomalie 0..1
+  aiAnomaly:   Boolean,
+  aiCause:     String,
 }, { versionKey: false });
 telemetrySchema.index({ deviceId: 1, ts: -1 });
 // Rétention automatique : 7 jours (index TTL)
@@ -24,7 +27,7 @@ telemetrySchema.index({ ts: 1 }, { expireAfterSeconds: 7 * 24 * 3600 });
 const alertSchema = new mongoose.Schema({
   deviceId: { type: String, index: true },
   ts:       { type: Date, default: Date.now },
-  kind:     String,       // THRESHOLD | STATISTICAL | PREDICTIVE | RECOVERY | CONNECTIVITY
+  kind:     String,       // THRESHOLD | STATISTICAL | PREDICTIVE | AI | RECOVERY | CONNECTIVITY
   metric:   String,
   severity: String,       // INFO | WARNING | CRITICAL
   value:    Number,

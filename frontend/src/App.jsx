@@ -5,6 +5,7 @@ import KpiCard from './components/KpiCard.jsx';
 import MetricChart from './components/MetricChart.jsx';
 import AlertList from './components/AlertList.jsx';
 import StatusBanner from './components/StatusBanner.jsx';
+import AiCard from './components/AiCard.jsx';
 
 const MAX_POINTS = 300;          // 5 min à 1 Hz
 const DEFAULT_THRESHOLDS = {
@@ -120,6 +121,7 @@ export default function App() {
         </div>
 
         <aside className="side">
+          <AiCard last={last} data={data} />
           <div className="card controls">
             <h3>Commandes</h3>
             <div className="btns">
@@ -148,6 +150,7 @@ function toPoint(t) {
     vibPeak: t.vibPeak,
     current: t.current,
     state: t.state,
+    aiScore: t.aiScore,
   };
 }
 
