@@ -8,3 +8,7 @@ Debug/
 Release/
 .DS_Store
 secrets.h
+
+# PlatformIO
+.pio/
+.vscode/
