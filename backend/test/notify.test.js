@@ -25,3 +25,14 @@ test('envoi + anti-spam 60 s', async () => {
   assert.equal(calls[0].body.chat_id, '42');
   assert.match(formatAlert(crit), /stm32-01.*Surchauffe/);
 });
+
+test('checkTelegram : diagnostic clair', async () => {
+  const { checkTelegram } = await import('../src/notify.js');
+  const ok = await checkTelegram({ fetchImpl: async () => ({ ok: true }) });
+  assert.equal(ok.ok, true);
+  const bad = await checkTelegram({ fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({ description: 'Bad Request: chat not found' }) }) });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /CHAT_ID incorrect.*chat not found/);
+  const tok = await checkTelegram({ fetchImpl: async () => ({ ok: false, status: 401, json: async () => ({}) }) });
+  assert.match(tok.error, /token invalide/);
+});

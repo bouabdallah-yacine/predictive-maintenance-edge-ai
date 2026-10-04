@@ -10,7 +10,7 @@ import mqtt from 'mqtt';
 import { Server as SocketServer } from 'socket.io';
 import { createStore } from './store.js';
 import { MachineAnalyzer, THRESHOLDS } from './anomaly.js';
-import { notify, telegramEnabled } from './notify.js';
+import { notify, telegramEnabled, checkTelegram } from './notify.js';
 
 const PORT         = Number(process.env.PORT ?? 4000);
 const MQTT_URL     = process.env.MQTT_URL ?? 'mqtt://broker.hivemq.com:1883';
@@ -193,5 +193,8 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`[HTTP] API + Socket.io sur http://localhost:${PORT}`);
-  console.log(telegramEnabled ? '[TELEGRAM] notifications activées' : '[TELEGRAM] désactivé (TELEGRAM_TOKEN / TELEGRAM_CHAT_ID absents)');
+  checkTelegram().then(({ ok, error }) => {
+    console.log(ok ? '[TELEGRAM] ✅ notifications activées (message de test envoyé sur ton téléphone)'
+                   : `[TELEGRAM] ❌ ${error}`);
+  });
 });

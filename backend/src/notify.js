@@ -41,3 +41,26 @@ export async function notify(alert, { fetchImpl = globalThis.fetch, now = Date.n
     return false;
   }
 }
+
+/**
+ * Vérifie réellement la configuration au démarrage : envoie un message de
+ * test. Renvoie { ok, error } pour afficher un diagnostic clair.
+ */
+export async function checkTelegram({ fetchImpl = globalThis.fetch } = {}) {
+  if (!telegramEnabled) return { ok: false, error: 'TELEGRAM_TOKEN / TELEGRAM_CHAT_ID absents de .env' };
+  try {
+    const r = await fetchImpl(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT_ID, text: '🟢 Machine Monitor : serveur démarré, alertes actives.' }),
+    });
+    if (r.ok) return { ok: true };
+    const body = await r.json().catch(() => ({}));
+    const why = r.status === 401 ? 'token invalide (TELEGRAM_TOKEN)'
+      : r.status === 400 || r.status === 403 ? `CHAT_ID incorrect ou conversation non démarrée (${body.description ?? r.status})`
+      : `erreur ${r.status}`;
+    return { ok: false, error: why };
+  } catch (e) {
+    return { ok: false, error: `Telegram injoignable (${e.message})` };
+  }
+}
