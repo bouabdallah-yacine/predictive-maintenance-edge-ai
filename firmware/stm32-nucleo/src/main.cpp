@@ -201,10 +201,13 @@ static int32_t mpuReadMagnitudeMg() {
 //  impulsion haute plus longue que la basse (≈70 µs vs 50 µs) vaut 1,
 //  plus courte (≈26 µs) vaut 0. Résultat en entiers (dixièmes).
 // ============================================================================
+#define PULSE_TIMEOUT 0xFFFF
+
+// Compte les tours de boucle tant que la ligne reste au niveau `level`
 static uint16_t pulseCount(int level) {
   uint16_t n = 0;
   while (digitalRead(PIN_DHT) == level) {
-    if (++n == 0xFFFF) return 0;        // délai dépassé
+    if (++n == PULSE_TIMEOUT) return PULSE_TIMEOUT;   // délai dépassé
   }
   return n;
 }
@@ -213,21 +216,23 @@ static bool dhtRead(int16_t *temp_d, uint16_t *hum_d) {
   uint16_t cycles[80];
   uint8_t data[5] = {0};
 
-  // Signal de départ : ligne à 0 pendant ≥ 1 ms, puis relâchée
+  // Signal de départ : ligne à 0 pendant ≥ 1 ms
   pinMode(PIN_DHT, OUTPUT);
   digitalWrite(PIN_DHT, LOW);
   vTaskDelay(pdMS_TO_TICKS(2));
-  pinMode(PIN_DHT, INPUT_PULLUP);
-  delayMicroseconds(55);                 // le capteur répond 20–40 µs après
 
-  // Section critique ≈ 5 ms : aucune préemption pendant la mesure des impulsions
+  // Section critique ≈ 5 ms, démarrée AVANT de relâcher la ligne : aucune
+  // tâche ne peut passer devant et nous faire rater la réponse du capteur.
   bool ok = true;
   taskENTER_CRITICAL();
-  if (pulseCount(LOW) == 0 || pulseCount(HIGH) == 0) ok = false;   // réponse 80 µs / 80 µs
+  pinMode(PIN_DHT, INPUT_PULLUP);
+  if (pulseCount(HIGH) == PULSE_TIMEOUT) ok = false;      // attente de la réponse (20–40 µs)
+  if (ok && pulseCount(LOW)  == PULSE_TIMEOUT) ok = false; // réponse : 80 µs à 0
+  if (ok && pulseCount(HIGH) == PULSE_TIMEOUT) ok = false; //           80 µs à 1
   for (int i = 0; ok && i < 80; i += 2) {
-    cycles[i]     = pulseCount(LOW);
-    cycles[i + 1] = pulseCount(HIGH);
-    if (cycles[i] == 0 || cycles[i + 1] == 0) ok = false;
+    cycles[i]     = pulseCount(LOW);                       // ≈ 50 µs
+    cycles[i + 1] = pulseCount(HIGH);                      // 26 µs (0) ou 70 µs (1)
+    if (cycles[i] == PULSE_TIMEOUT || cycles[i + 1] == PULSE_TIMEOUT) ok = false;
   }
   taskEXIT_CRITICAL();
   if (!ok) return false;
