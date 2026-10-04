@@ -55,7 +55,13 @@ export class FrameParser {
  * garder que les données.
  */
 export class TelnetFilter {
-  constructor() { this.st = 'DATA'; }
+  constructor() { this.st = 'DATA'; this.cmd = 0; this.replies = []; }
+
+  /**
+   * Filtre un bloc reçu ; renvoie le texte utile. Les réponses de négociation
+   * à renvoyer au serveur sont accumulées dans this.replies (voir takeReplies).
+   * On accepte BINARY (0) et SUPPRESS-GO-AHEAD (3), on refuse le reste.
+   */
   push(buf) {
     let out = '';
     for (const b of buf) {
@@ -63,15 +69,23 @@ export class TelnetFilter {
         case 'DATA': if (b === 255) this.st = 'IAC'; else out += String.fromCharCode(b); break;
         case 'IAC':
           if (b === 255) { out += '\xff'; this.st = 'DATA'; }
-          else if (b >= 251 && b <= 254) this.st = 'OPT';    // WILL/WONT/DO/DONT <option>
-          else if (b === 250) this.st = 'SB';                // sous-négociation
+          else if (b >= 251 && b <= 254) { this.cmd = b; this.st = 'OPT'; }  // WILL/WONT/DO/DONT
+          else if (b === 250) this.st = 'SB';                                  // sous-négociation
           else this.st = 'DATA';
           break;
-        case 'OPT': this.st = 'DATA'; break;
+        case 'OPT': {
+          const ok = b === 0 || b === 3;
+          if (this.cmd === 251) this.replies.push(255, ok ? 253 : 254, b);      // WILL → DO / DONT
+          if (this.cmd === 253) this.replies.push(255, ok ? 251 : 252, b);      // DO   → WILL / WONT
+          this.st = 'DATA';
+          break;
+        }
         case 'SB': if (b === 255) this.st = 'SB_IAC'; break;
-        case 'SB_IAC': this.st = b === 240 ? 'DATA' : 'SB'; break;  // IAC SE
+        case 'SB_IAC': this.st = b === 240 ? 'DATA' : 'SB'; break;          // IAC SE
       }
     }
     return out;
   }
+
+  takeReplies() { const r = Buffer.from(this.replies); this.replies = []; return r; }
 }

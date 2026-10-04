@@ -37,3 +37,10 @@ test('filtre Telnet (RFC2217) : retire la négociation', () => {
   const out = t.push(Buffer.concat([neg, data.subarray(0, 10)])) + t.push(data.subarray(10));
   assert.equal(out, data.toString());
 });
+
+test('filtre Telnet : répond à la négociation (accepte BINARY/SGA, refuse le reste)', () => {
+  const t = new TelnetFilter();
+  t.push(Buffer.from([255, 251, 0, 255, 251, 3, 255, 253, 44, 255, 251, 1]));
+  assert.deepEqual([...t.takeReplies()], [255, 253, 0, 255, 253, 3, 255, 252, 44, 255, 254, 1]);
+  assert.equal(t.takeReplies().length, 0);
+});

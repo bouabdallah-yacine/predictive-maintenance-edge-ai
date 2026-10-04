@@ -102,6 +102,7 @@ async function handleStatus(deviceId, status) {
   const online = status === 'online';
   if (d.online === online) return;
   d.online = online;
+  if (online) d.lastSeen = Date.now();   // le watchdog part de la connexion
   devices.set(deviceId, d);
   io.emit('device', publicDevice(d));
   const alert = await store.saveAlert({
