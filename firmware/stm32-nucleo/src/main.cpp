@@ -27,6 +27,7 @@
  */
 #include <Arduino.h>
 #include <STM32FreeRTOS.h>
+#include "stm32yyxx_ll_gpio.h"   // accès direct aux registres GPIO (pilotes "LL" de ST)
 #include "protocol.h"
 
 // ---------------------------------------------------------------- Brochage
@@ -97,12 +98,29 @@ static uint32_t isqrt(uint32_t x) {
 //  Sortie "collecteur ouvert" émulée : niveau bas = sortie à 0,
 //  niveau haut = broche relâchée (entrée avec pull-up).
 // ============================================================================
-#define I2C_DELAY() delayMicroseconds(3)
+#define I2C_DELAY() delayMicroseconds(2)
 
-static inline void sclHigh() { pinMode(PIN_SCL, INPUT_PULLUP); }
-static inline void sclLow()  { pinMode(PIN_SCL, OUTPUT); digitalWrite(PIN_SCL, LOW); }
-static inline void sdaHigh() { pinMode(PIN_SDA, INPUT_PULLUP); }
-static inline void sdaLow()  { pinMode(PIN_SDA, OUTPUT); digitalWrite(PIN_SDA, LOW); }
+// PB8 = SCL, PB9 = SDA. Le registre de sortie (ODR) est mis à 0 une fois pour
+// toutes et la résistance de tirage (pull-up) est activée : il suffit ensuite
+// de basculer le mode de la broche (registre MODER) entre "entrée" (= niveau
+// haut via le pull-up) et "sortie" (= niveau bas). Quelques cycles d'horloge
+// seulement, contre plusieurs microsecondes pour pinMode().
+#define I2C_PORT    GPIOB
+#define I2C_SCL_LL  LL_GPIO_PIN_8
+#define I2C_SDA_LL  LL_GPIO_PIN_9
+
+static inline void sclHigh() { LL_GPIO_SetPinMode(I2C_PORT, I2C_SCL_LL, LL_GPIO_MODE_INPUT); }
+static inline void sclLow()  { LL_GPIO_SetPinMode(I2C_PORT, I2C_SCL_LL, LL_GPIO_MODE_OUTPUT); }
+static inline void sdaHigh() { LL_GPIO_SetPinMode(I2C_PORT, I2C_SDA_LL, LL_GPIO_MODE_INPUT); }
+static inline void sdaLow()  { LL_GPIO_SetPinMode(I2C_PORT, I2C_SDA_LL, LL_GPIO_MODE_OUTPUT); }
+static inline bool sdaRead() { return LL_GPIO_IsInputPinSet(I2C_PORT, I2C_SDA_LL); }
+
+static void i2cBegin() {
+  pinMode(PIN_SCL, INPUT_PULLUP);                    // active l'horloge du port + pull-up
+  pinMode(PIN_SDA, INPUT_PULLUP);
+  LL_GPIO_SetPinOutputType(I2C_PORT, I2C_SCL_LL | I2C_SDA_LL, LL_GPIO_OUTPUT_PUSHPULL);
+  LL_GPIO_ResetOutputPin(I2C_PORT, I2C_SCL_LL | I2C_SDA_LL);  // ODR = 0
+}
 
 static void i2cStart() { sdaHigh(); sclHigh(); I2C_DELAY(); sdaLow(); I2C_DELAY(); sclLow(); }
 static void i2cStop()  { sdaLow(); I2C_DELAY(); sclHigh(); I2C_DELAY(); sdaHigh(); I2C_DELAY(); }
@@ -115,7 +133,7 @@ static bool i2cWrite(uint8_t b) {
     I2C_DELAY(); sclHigh(); I2C_DELAY(); sclLow();
   }
   sdaHigh(); I2C_DELAY(); sclHigh(); I2C_DELAY();
-  bool ack = digitalRead(PIN_SDA) == LOW;
+  bool ack = !sdaRead();
   sclLow();
   return ack;
 }
@@ -125,7 +143,7 @@ static uint8_t i2cRead(bool ack) {
   sdaHigh();
   for (int i = 0; i < 8; i++) {
     I2C_DELAY(); sclHigh(); I2C_DELAY();
-    b = (uint8_t)((b << 1) | (digitalRead(PIN_SDA) == HIGH ? 1 : 0));
+    b = (uint8_t)((b << 1) | (sdaRead() ? 1 : 0));
     sclLow();
   }
   if (ack) sdaLow(); else sdaHigh();
@@ -423,8 +441,7 @@ void setup() {
   analogReadResolution(12);
 
   // Capteurs initialisés AVANT FreeRTOS (plus simple à diagnostiquer)
-  sdaHigh();
-  sclHigh();
+  i2cBegin();
   g_mpuOk = mpuInit();
   Link.println(g_mpuOk ? "# MPU6050 OK" : "# MPU6050 absent (vibration desactivee)");
   pinMode(PIN_DHT, INPUT_PULLUP);
@@ -438,7 +455,7 @@ void setup() {
   ok &= xTaskCreate(VibTask,      "vib",      160, NULL, tskIDLE_PRIORITY + 4, NULL);
   ok &= xTaskCreate(EnvTask,      "env",      200, NULL, tskIDLE_PRIORITY + 3, NULL);
   ok &= xTaskCreate(AnalysisTask, "analysis", 160, NULL, tskIDLE_PRIORITY + 3, &analysisHandle);
-  ok &= xTaskCreate(CommTask,     "comm",     160, NULL, tskIDLE_PRIORITY + 2, NULL);
+  ok &= xTaskCreate(CommTask,     "comm",     160, NULL, tskIDLE_PRIORITY + 3, NULL);
   ok &= xTaskCreate(BuzzerTask,   "buzzer",    96, NULL, tskIDLE_PRIORITY + 1, &buzzerHandle);
   Link.println(ok == pdTRUE ? "# taches creees, demarrage FreeRTOS" : "# ERREUR creation des taches (memoire)");
 

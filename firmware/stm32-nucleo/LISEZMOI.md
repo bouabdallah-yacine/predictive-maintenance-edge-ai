@@ -28,7 +28,7 @@ d'alerte et envoient une trame UART par seconde.
 | VibTask | 4 | 10 ms | lit le MPU6050, RMS sur 1 s |
 | EnvTask | 3 | 2 s | DHT22 + courant (moyenne 32 échantillons ADC) |
 | AnalysisTask | 3 | 1 s | niveaux, LEDs, buzzer, trame → file |
-| CommTask | 2 | événement | envoie les trames, reçoit les commandes F1/F0 |
+| CommTask | 3 | événement | envoie les trames, reçoit les commandes F1/F0 |
 
 Synchronisation : mutex sur les mesures partagées, file de messages vers CommTask,
 notification de tâche depuis l'ISR du bouton.
