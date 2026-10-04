@@ -33,6 +33,15 @@ const io = new SocketServer(server, { cors: { origin: '*' } });
 // ---------------------------------------------------------------------------
 //  MQTT
 // ---------------------------------------------------------------------------
+// Diagnostic (sans afficher le mot de passe) : ce que le backend a vraiment lu dans .env
+{
+  const u = process.env.MQTT_USERNAME ?? '', p = process.env.MQTT_PASSWORD ?? '';
+  const warn = [];
+  if (/^\s|\s$/.test(u) || /^\s|\s$/.test(p)) warn.push('espace au début ou à la fin');
+  if (/["']/.test(p)) warn.push('guillemet dans le mot de passe');
+  if (u && !p) warn.push('mot de passe vide (un # le coupe ? mets-le entre guillemets)');
+  console.log(`[MQTT] identifiant "${u}" — mot de passe : ${p.length} caractères${warn.length ? ` ⚠️ ${warn.join(', ')}` : ''}`);
+}
 const client = mqtt.connect(MQTT_URL, {
   clientId: `monitor-backend-${Math.random().toString(16).slice(2, 8)}`,
   reconnectPeriod: 2000,
