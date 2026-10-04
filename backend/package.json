@@ -9,7 +9,8 @@
     "dev": "node --watch src/index.js",
     "test": "node --test test/*.test.js",
     "stm32": "node tools/stm32-gateway.js",
-    "telegram": "node tools/telegram-setup.js"
+    "telegram": "node tools/telegram-setup.js",
+    "cable": "node tools/virtual-cable.js"
   },
   "license": "MIT",
   "dependencies": {

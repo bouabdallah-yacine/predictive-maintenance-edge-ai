@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "author": "Machine Monitor PFE",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_rx", "top": -80, "left": 150, "attrs": { "color": "blue", "label": "UART RX" } },
+    { "type": "wokwi-led", "id": "led_net", "top": -80, "left": 210, "attrs": { "color": "green", "label": "MQTT" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 0, "left": 150, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r2", "top": 0, "left": 210, "rotate": 90, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "led_rx:A", "esp:2", "blue", [] ],
+    [ "led_net:A", "esp:4", "green", [] ],
+    [ "led_rx:C", "r1:1", "black", [] ],
+    [ "led_net:C", "r2:1", "black", [] ],
+    [ "r1:2", "esp:GND.2", "black", [] ],
+    [ "r2:2", "esp:GND.2", "black", [] ]
+  ],
+  "dependencies": {}
+}

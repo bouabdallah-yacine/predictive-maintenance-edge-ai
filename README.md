@@ -39,6 +39,7 @@ des alertes, export CSV, plusieurs machines, Docker Compose, CI GitHub Actions.
 firmware/
 ├── esp32-wokwi/      ESP32 autonome : 6 tâches FreeRTOS, capteurs, OLED, MQTT  ← à lancer sur Wokwi
 ├── esp32-bridge/     ESP32 passerelle UART → MQTT (architecture complète avec STM32)
+├── esp32-bridge-vscode/ la même passerelle, en projet PlatformIO simulable sur Wokwi
 ├── esp32-vscode/     Projet PlatformIO de l'ESP32 pour Wokwi dans VS Code
 ├── stm32-nucleo/      STM32 Nucleo-C031C6 + FreeRTOS (PlatformIO) simulable sur Wokwi
 └── stm32/            STM32 FreeRTOS (CMSIS-RTOS v2), pilotes capteurs, protocole UART, Renode
@@ -102,6 +103,15 @@ puis dans `backend/` : `npm run stm32`. Wokwi expose l'UART du STM32 sur `localh
 Les commandes « Injecter une panne » du dashboard redescendent jusqu'au STM32.
 
 > 💡 Wokwi met la simulation en pause quand son onglet n'est pas visible : garde la fenêtre de simulation affichée (par exemple côte à côte avec le dashboard), sinon aucune trame n'arrive.
+
+### Option 4 bis : architecture complète STM32 → UART → ESP32 → Wi-Fi (deux simulations)
+
+1. Simulation STM32 : `firmware/stm32-nucleo/` (port série exposé sur 4100).
+2. Simulation ESP32 passerelle : `firmware/esp32-bridge-vscode/` (port série exposé sur 4200).
+3. Câble UART virtuel entre les deux : `cd backend && npm run cable`.
+
+Le STM32 mesure, l'ESP32 reçoit les trames par UART et les publie en MQTT par Wi-Fi ;
+les commandes du dashboard redescendent ESP32 → STM32. Garde les deux simulations visibles.
 
 ### Option 5 : STM32CubeIDE (HAL) + Renode
 

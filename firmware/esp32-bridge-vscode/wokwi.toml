@@ -1,0 +1,7 @@
+[wokwi]
+version = 1
+firmware = '.pio/build/esp32/firmware.bin'
+elf = '.pio/build/esp32/firmware.elf'
+# Port série de l'ESP32 exposé sur localhost:4200 : le "câble virtuel"
+# (backend/tools/virtual-cable.js) le relie au port 4100 du STM32
+rfc2217ServerPort = 4200
