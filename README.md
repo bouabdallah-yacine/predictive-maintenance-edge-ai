@@ -1,5 +1,7 @@
 # ⚙️ Machine Monitor : surveillance industrielle et détection d'anomalies
 
+[![Tests](https://github.com/bouabdellah-yacine/predictive-maintenance-edge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bouabdellah-yacine/predictive-maintenance-edge-ai/actions/workflows/ci.yml)
+
 Système IoT de **maintenance prédictive** : des capteurs surveillent une machine (température, vibration, courant),
 un microcontrôleur sous **FreeRTOS** détecte les dérives, un **réseau de neurones embarqué (TinyML)** repère les
 comportements anormaux et un **dashboard web temps réel** affiche l'état et les alertes.
