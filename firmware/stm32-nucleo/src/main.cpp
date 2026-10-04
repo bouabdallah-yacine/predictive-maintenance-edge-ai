@@ -212,7 +212,10 @@ static uint16_t pulseCount(int level) {
   return n;
 }
 
-static bool dhtRead(int16_t *temp_d, uint16_t *hum_d) {
+// Renvoie 0 si OK, sinon le numéro de l'étape qui a échoué (diagnostic) :
+//  1 = pas de réponse du capteur, 2/3 = réponse 80 µs incomplète,
+//  10+n = bit n incomplet, 99 = somme de contrôle fausse
+static int dhtRead(int16_t *temp_d, uint16_t *hum_d) {
   uint16_t cycles[80];
   uint8_t data[5] = {0};
 
@@ -223,30 +226,30 @@ static bool dhtRead(int16_t *temp_d, uint16_t *hum_d) {
 
   // Section critique ≈ 5 ms, démarrée AVANT de relâcher la ligne : aucune
   // tâche ne peut passer devant et nous faire rater la réponse du capteur.
-  bool ok = true;
+  int err = 0;
   taskENTER_CRITICAL();
   pinMode(PIN_DHT, INPUT_PULLUP);
-  if (pulseCount(HIGH) == PULSE_TIMEOUT) ok = false;      // attente de la réponse (20–40 µs)
-  if (ok && pulseCount(LOW)  == PULSE_TIMEOUT) ok = false; // réponse : 80 µs à 0
-  if (ok && pulseCount(HIGH) == PULSE_TIMEOUT) ok = false; //           80 µs à 1
-  for (int i = 0; ok && i < 80; i += 2) {
-    cycles[i]     = pulseCount(LOW);                       // ≈ 50 µs
-    cycles[i + 1] = pulseCount(HIGH);                      // 26 µs (0) ou 70 µs (1)
-    if (cycles[i] == PULSE_TIMEOUT || cycles[i + 1] == PULSE_TIMEOUT) ok = false;
+  if (pulseCount(HIGH) == PULSE_TIMEOUT) err = 1;              // attente de la réponse (20–40 µs)
+  if (!err && pulseCount(LOW)  == PULSE_TIMEOUT) err = 2;      // réponse : 80 µs à 0
+  if (!err && pulseCount(HIGH) == PULSE_TIMEOUT) err = 3;      //           80 µs à 1
+  for (int i = 0; !err && i < 80; i += 2) {
+    cycles[i]     = pulseCount(LOW);                           // ≈ 50 µs
+    cycles[i + 1] = pulseCount(HIGH);                          // 26 µs (0) ou 70 µs (1)
+    if (cycles[i] == PULSE_TIMEOUT || cycles[i + 1] == PULSE_TIMEOUT) err = 10 + i / 2;
   }
   taskEXIT_CRITICAL();
-  if (!ok) return false;
+  if (err) return err;
 
   for (int i = 0; i < 40; i++) {
     data[i / 8] <<= 1;
     if (cycles[2 * i + 1] > cycles[2 * i]) data[i / 8] |= 1;
   }
-  if ((uint8_t)(data[0] + data[1] + data[2] + data[3]) != data[4]) return false;
+  if ((uint8_t)(data[0] + data[1] + data[2] + data[3]) != data[4]) return 99;
 
   *hum_d = (uint16_t)((data[0] << 8) | data[1]);
   int16_t t = (int16_t)(((data[2] & 0x7F) << 8) | data[3]);
   *temp_d = (data[2] & 0x80) ? (int16_t)-t : t;
-  return true;
+  return 0;
 }
 
 // ============================================================================
@@ -311,7 +314,15 @@ static void EnvTask(void *) {
 
     int16_t t = 0;
     uint16_t h = 0;
-    bool dhtOk = dhtRead(&t, &h);
+    static int lastErr = -1;
+    int err = dhtRead(&t, &h);
+    bool dhtOk = (err == 0);
+    if (err != lastErr) {                            // trace uniquement les changements
+      Link.print("# DHT22 ");
+      if (dhtOk) Link.println("OK");
+      else { Link.print("erreur etape "); Link.println(err); }
+      lastErr = err;
+    }
 
     xSemaphoreTake(measureMutex, portMAX_DELAY);
     g_measure.curr_ma = (uint16_t)ma;
