@@ -10,11 +10,14 @@ import mqtt from 'mqtt';
 import { Server as SocketServer } from 'socket.io';
 import { createStore } from './store.js';
 import { MachineAnalyzer, THRESHOLDS } from './anomaly.js';
+import { notify, telegramEnabled } from './notify.js';
 
 const PORT         = Number(process.env.PORT ?? 4000);
 const MQTT_URL     = process.env.MQTT_URL ?? 'mqtt://broker.hivemq.com:1883';
 const TOPIC_PREFIX = process.env.TOPIC_PREFIX ?? 'pfe-monitor-7f3a';
-const MONGO_URL    = process.env.MONGO_URL ?? 'mongodb://localhost:27017/machine_monitor';
+// 127.0.0.1 plutôt que localhost : sous Windows, Node essaie d'abord l'IPv6 (::1)
+// alors que MongoDB n'écoute qu'en IPv4 par défaut → ECONNREFUSED
+const MONGO_URL    = process.env.MONGO_URL ?? 'mongodb://127.0.0.1:27017/machine_monitor';
 const OFFLINE_SEC  = Number(process.env.OFFLINE_SEC ?? 10);
 
 const store = await createStore(MONGO_URL);
@@ -85,6 +88,7 @@ async function handleTelemetry(deviceId, msg) {
   for (const ev of result.events) {
     const alert = await store.saveAlert({ deviceId, ts: new Date(), ...ev });
     io.emit('alert', alert);
+    notify(alert);
     console.log(`[ALERTE] ${deviceId} ${ev.severity} — ${ev.message}`);
   }
 }
@@ -111,6 +115,7 @@ async function handleStatus(deviceId, status) {
     message: online ? 'Équipement connecté' : 'Équipement hors ligne (Last Will MQTT)',
   });
   io.emit('alert', alert);
+  notify(alert);
 }
 
 // Watchdog côté serveur : plus de données depuis OFFLINE_SEC → hors ligne
@@ -128,7 +133,7 @@ const publicDevice = (d) => ({ deviceId: d.deviceId, online: d.online, lastSeen:
 //  API REST
 // ---------------------------------------------------------------------------
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, mqtt: client.connected, store: store.name, topicPrefix: TOPIC_PREFIX });
+  res.json({ ok: true, mqtt: client.connected, store: store.name, telegram: telegramEnabled, topicPrefix: TOPIC_PREFIX });
 });
 
 app.get('/api/config', (_req, res) => res.json({ thresholds: THRESHOLDS }));
@@ -186,4 +191,7 @@ io.on('connection', (socket) => {
   socket.emit('devices', [...devices.values()].map(publicDevice));
 });
 
-server.listen(PORT, () => console.log(`[HTTP] API + Socket.io sur http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`[HTTP] API + Socket.io sur http://localhost:${PORT}`);
+  console.log(telegramEnabled ? '[TELEGRAM] notifications activées' : '[TELEGRAM] désactivé (TELEGRAM_TOKEN / TELEGRAM_CHAT_ID absents)');
+});

@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test test/*.test.js",
-    "stm32": "node tools/stm32-gateway.js"
+    "stm32": "node tools/stm32-gateway.js",
+    "telegram": "node tools/telegram-setup.js"
   },
   "license": "MIT",
   "dependencies": {
