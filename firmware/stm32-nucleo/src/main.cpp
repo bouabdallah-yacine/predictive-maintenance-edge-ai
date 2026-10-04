@@ -12,8 +12,8 @@
  *                                     LEDs verte/jaune/rouge + BuzzerTask
  *
  *  Câblage (diagram.json) :
- *    NTC (température moteur) → PA1 | MPU6050 → I2C logiciel (PB8 SCL, PB9 SDA)
- *    Potentiomètre (ACS712) → PA0
+ *    NTC (température moteur) → PA1 | Humidité HIH-4030 (potentiomètre) → PA4
+ *    MPU6050 → I2C logiciel (PB8 SCL, PB9 SDA) | Potentiomètre (ACS712) → PA0
  *    LEDs PB13/PB14/PB15 | Buzzer PB10 | Bouton "Panne" PB11 | USART2 PA2 TX / PA3 RX
  *
  *  Optimisé pour 32 Ko de flash / 12 Ko de RAM :
@@ -34,6 +34,7 @@
 
 // ---------------------------------------------------------------- Brochage
 #define PIN_TEMP       PA1      // thermistance NTC (entrée analogique)
+#define PIN_HUM        PA4      // capteur d'humidité analogique HIH-4030 (potentiomètre en simulation)
 #define PIN_CURRENT    PA0
 #define PIN_SCL        PB8
 #define PIN_SDA        PB9
@@ -212,6 +213,22 @@ static const uint16_t NTC_TABLE[] = {
    462,  401,  350,  305,  267,  234,  206,  181,  160,  142 };   // −40 … 125 °C
 #define NTC_N (sizeof(NTC_TABLE) / sizeof(NTC_TABLE[0]))
 
+// ============================================================================
+//  Humidité : capteur analogique Honeywell HIH-4030 (sortie ratiométrique)
+//    Vout = Vcc × (0,0062 × HR + 0,16)  →  HR = (Vout/Vcc − 0,16) / 0,0062
+//  En entiers : r = Vout/Vcc en ‰ ; HR (dixièmes de %) = (r − 160) × 100 / 62
+//  (dans le simulateur, un potentiomètre remplace le capteur)
+// ============================================================================
+static uint16_t humidityRead() {
+  uint32_t sum = 0;
+  for (int i = 0; i < 16; i++) sum += analogRead(PIN_HUM);
+  int32_t r = (int32_t)((sum / 16) * 1000UL / 4095UL);   // rapport Vout/Vcc en ‰
+  int32_t hr = (r - 160) * 100 / 62;                     // dixièmes de %
+  if (hr < 0) hr = 0;
+  if (hr > 1000) hr = 1000;
+  return (uint16_t)hr;
+}
+
 // Renvoie true si la mesure est plausible ; température en dixièmes de °C
 static bool ntcReadTempD(int16_t *temp_d) {
   uint32_t sum = 0;
@@ -277,7 +294,7 @@ static void VibTask(void *) {
 }
 
 // ============================================================================
-//  EnvTask : température NTC + courant ACS712 (ADC), toutes les 500 ms
+//  EnvTask : température NTC + humidité HIH-4030 + courant ACS712 (ADC), 500 ms
 // ============================================================================
 static void EnvTask(void *) {
   Link.println("# tache env demarree");
@@ -292,12 +309,13 @@ static void EnvTask(void *) {
 
     int16_t t = 0;
     bool tempOk = ntcReadTempD(&t);
+    uint16_t hum = humidityRead();
 
     xSemaphoreTake(measureMutex, portMAX_DELAY);
     g_measure.curr_ma = (uint16_t)ma;
     g_measure.dht_ok  = tempOk;                      // bit "capteur température OK"
     if (tempOk) g_measure.temp_d = (int16_t)(t + (g_fault ? 350 : 0));
-    g_measure.hum_d   = 0;                           // pas d'humidité sur ce nœud
+    g_measure.hum_d   = hum;
     xSemaphoreGive(measureMutex);
 
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -427,7 +445,7 @@ void setup() {
   i2cBegin();
   g_mpuOk = mpuInit();
   Link.println(g_mpuOk ? "# MPU6050 OK" : "# MPU6050 absent (vibration desactivee)");
-  Link.println("# capteur temperature NTC pret");
+  Link.println("# capteurs NTC + humidite HIH-4030 prets");
 
   measureMutex = xSemaphoreCreateMutex();            // mutex avec héritage de priorité
   frameQueue   = xQueueCreate(4, sizeof(proto_frame_t));

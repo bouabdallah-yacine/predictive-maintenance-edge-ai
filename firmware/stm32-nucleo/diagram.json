@@ -111,6 +111,15 @@
         "color": "red",
         "label": "Panne"
       }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_hum",
+      "top": 120,
+      "left": -330,
+      "attrs": {
+        "value": "512"
+      }
     }
   ],
   "connections": [
@@ -262,6 +271,24 @@
       "btn1:2.l",
       "stm:GND.4",
       "black",
+      []
+    ],
+    [
+      "pot_hum:VCC",
+      "stm:3V3.2",
+      "red",
+      []
+    ],
+    [
+      "pot_hum:GND",
+      "stm:GND.5",
+      "black",
+      []
+    ],
+    [
+      "pot_hum:SIG",
+      "stm:PA4",
+      "cyan",
       []
     ]
   ],

@@ -15,6 +15,7 @@ d'alerte et envoient une trame UART par seconde.
 | Élément | Broche STM32 | Périphérique |
 |---|---|---|
 | Thermistance NTC 10 kΩ (température moteur) | PA1 | ADC canal 1 (table précalculée) |
+| Humidité HIH-4030 (potentiomètre en simulation) | PA4 | ADC canal 4 |
 | MPU6050 | PB8 SCL / PB9 SDA | I2C1 |
 | Potentiomètre (ACS712) | PA0 | ADC canal 0 |
 | LEDs vert/jaune/rouge | PB13 / PB14 / PB15 | GPIO |
@@ -26,7 +27,7 @@ d'alerte et envoient une trame UART par seconde.
 | Tâche | Priorité | Période | Rôle |
 |---|---|---|---|
 | VibTask | 4 | 10 ms | lit le MPU6050, RMS sur 1 s |
-| EnvTask | 3 | 500 ms | température NTC + courant (moyennes ADC) |
+| EnvTask | 3 | 500 ms | température NTC + humidité + courant (moyennes ADC) |
 | AnalysisTask | 3 | 1 s | niveaux, LEDs, buzzer, trame → file |
 | CommTask | 3 | événement | envoie les trames, reçoit les commandes F1/F0 |
 
