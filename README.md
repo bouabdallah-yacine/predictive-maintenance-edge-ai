@@ -185,4 +185,4 @@ Aussi : `<prefix>/<id>/status` (`online` / `offline`, retenu + Last Will) et `<p
 
 ## Licence
 
-MIT
+© 2026 Yacine — tous droits réservés. Code publié pour consultation uniquement (voir [`LICENSE`](LICENSE)).
