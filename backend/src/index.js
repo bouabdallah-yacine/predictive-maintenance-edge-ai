@@ -48,7 +48,25 @@ client.on('connect', () => {
 });
 client.on('reconnect', () => console.log('[MQTT] reconnexion...'));
 client.on('close', () => io.emit('broker', { connected: false }));
-client.on('error', (e) => console.error('[MQTT] erreur :', e.message, /Not authorized|Bad User Name/i.test(e.message) ? '→ vérifie MQTT_USERNAME / MQTT_PASSWORD dans .env' : ''));
+client.on('error', (e) => console.error('[MQTT] erreur :', explainMqttError(e)));
+
+// Message d'erreur lisible (certaines erreurs réseau ont un message vide)
+function explainMqttError(e) {
+  const inner = e.errors?.[0] ?? e;                 // AggregateError (IPv4 + IPv6)
+  const code = inner.code ?? e.code ?? '';
+  const msg = inner.message || e.message || String(code) || e.constructor?.name || 'inconnue';
+  const host = (() => { try { return new URL(MQTT_URL).hostname; } catch { return MQTT_URL; } })();
+  const hints = {
+    ENOTFOUND: `adresse "${host}" introuvable → vérifie MQTT_URL dans .env (sans https://, sans espace)`,
+    EAI_AGAIN: 'pas de résolution DNS → vérifie ta connexion Internet',
+    ECONNREFUSED: 'connexion refusée → vérifie le port (8883 pour mqtts)',
+    ETIMEDOUT: 'délai dépassé → le port 8883 est peut-être bloqué par ton réseau (essaie un partage de connexion du téléphone)',
+    ECONNRESET: 'connexion coupée → vérifie que l\'URL commence par mqtts:// et que le port est 8883',
+  };
+  if (/Not authorized|Bad User Name|bad username/i.test(msg)) return `${msg} → vérifie MQTT_USERNAME / MQTT_PASSWORD dans .env`;
+  if (/certificate|self.signed|unable to verify/i.test(msg)) return `${msg} → problème de certificat TLS`;
+  return `${msg}${code && !msg.includes(code) ? ` (${code})` : ''}${hints[code] ? ` → ${hints[code]}` : ''}`;
+}
 
 client.on('message', async (topic, payload) => {
   const [, deviceId, kind] = topic.split('/');
