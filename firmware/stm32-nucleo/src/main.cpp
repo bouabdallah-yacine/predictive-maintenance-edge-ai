@@ -224,9 +224,12 @@ static int dhtRead(int16_t *temp_d, uint16_t *hum_d) {
   digitalWrite(PIN_DHT, LOW);
   vTaskDelay(pdMS_TO_TICKS(2));
 
-  // Section critique ≈ 5 ms, démarrée AVANT de relâcher la ligne : aucune
-  // tâche ne peut passer devant et nous faire rater la réponse du capteur.
+  // Lecture ≈ 5 ms protégée AVANT de relâcher la ligne :
+  //  - vTaskSuspendAll() : aucune autre tâche ne peut prendre la main
+  //    (ex. VibTask qui occupe ~1 ms toutes les 10 ms) ;
+  //  - section critique : pas d'interruption non plus.
   int err = 0;
+  vTaskSuspendAll();
   taskENTER_CRITICAL();
   pinMode(PIN_DHT, INPUT_PULLUP);
   if (pulseCount(HIGH) == PULSE_TIMEOUT) err = 1;              // attente de la réponse (20–40 µs)
@@ -238,6 +241,7 @@ static int dhtRead(int16_t *temp_d, uint16_t *hum_d) {
     if (cycles[i] == PULSE_TIMEOUT || cycles[i + 1] == PULSE_TIMEOUT) err = 10 + i / 2;
   }
   taskEXIT_CRITICAL();
+  xTaskResumeAll();
   if (err) return err;
 
   for (int i = 0; i < 40; i++) {
@@ -316,6 +320,10 @@ static void EnvTask(void *) {
     uint16_t h = 0;
     static int lastErr = -1;
     int err = dhtRead(&t, &h);
+    if (err) {                                       // une seconde chance
+      vTaskDelay(pdMS_TO_TICKS(50));
+      err = dhtRead(&t, &h);
+    }
     bool dhtOk = (err == 0);
     if (err != lastErr) {                            // trace uniquement les changements
       Link.print("# DHT22 ");
