@@ -1,25 +1,25 @@
 /*
  * ============================================================================
- *  Machine Monitor — Nœud ESP32 (simulable sur Wokwi)
+ *  Machine Monitor — ESP32 node (can be simulated on Wokwi)
  * ============================================================================
- *  Surveillance d'une machine industrielle : température, vibration, courant.
- *  Architecture temps réel FreeRTOS :
+ *  Monitoring of an industrial machine: temperature, vibration, current.
+ *  FreeRTOS real-time architecture:
  *
  *    taskVibration (100 Hz)  ─┐
  *    taskEnvironment (5 Hz)  ─┼─► g_sensors (mutex) ─► taskAnalysis (1 Hz)
- *                             │                         │  machine à états
- *    ISR bouton ─► sémaphore ─► taskButton              ├─► LEDs / buzzer
+ *                             │                         │  state machine
+ *    button ISR ─► semaphore ─► taskButton              ├─► LEDs / buzzer
  *                                                       └─► xTelemetryQueue
  *                                                              │
  *    taskDisplay (2 Hz) ◄─ g_last (mutex)       taskMqtt ◄────┘  Wi-Fi + MQTT
  *
- *  Le bus I2C est partagé entre le MPU6050 et l'OLED → protégé par un mutex.
- *  La file de télémétrie sert aussi de tampon quand le Wi-Fi est coupé.
+ *  The I2C bus is shared between the MPU6050 and the OLED → protected by a mutex.
+ *  The telemetry queue also acts as a buffer while Wi-Fi is down.
  *
- *  Câblage (voir diagram.json) :
+ *  Wiring (see diagram.json):
  *    DHT22 -> GPIO15 | MPU6050 + SSD1306 -> I2C (SDA 21, SCL 22)
- *    Potentiomètre (simule ACS712) -> GPIO34 (ADC1_CH6)
- *    LED verte 25, LED jaune 26, LED rouge 27, buzzer 14, bouton 13
+ *    Potentiometer (simulates ACS712) -> GPIO34 (ADC1_CH6)
+ *    green LED 25, yellow LED 26, red LED 27, buzzer 14, button 13
  * ============================================================================
  */
 #include <WiFi.h>
@@ -32,19 +32,19 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <math.h>
-#include "tinyml.h"     // IA embarquée (TinyML) : détection d'anomalies
+#include "tinyml.h"     // on-device AI (TinyML): anomaly detection
 
 // ----------------------------------------------------------------------------
-//  Configuration (à adapter)
+//  Configuration (adjust as needed)
 // ----------------------------------------------------------------------------
-#define WIFI_SSID      "Wokwi-GUEST"   // réseau Wi-Fi simulé de Wokwi
+#define WIFI_SSID      "Wokwi-GUEST"   // Wokwi simulated Wi-Fi network
 #define WIFI_PASS      ""
-// --- Broker MQTT : identifiants dans secrets.h (non publié sur GitHub) ------
+// --- MQTT broker: credentials in secrets.h (not published on GitHub) -------
 #if __has_include("secrets.h")
   #include "secrets.h"
 #endif
 #ifndef MQTT_HOST
-  #define MQTT_HOST    "broker.hivemq.com"   // repli : broker public (démo)
+  #define MQTT_HOST    "broker.hivemq.com"   // fallback: public broker (demo)
 #endif
 #ifndef MQTT_USE_TLS
   #define MQTT_USE_TLS 0
@@ -63,10 +63,10 @@
   #include "ca_cert.h"
 #endif
 #define DEVICE_ID      "machine01"
-// ⚠️ Broker public : choisis un préfixe unique (le même dans backend/.env)
+// ⚠️ Public broker: pick a unique prefix (the same one in backend/.env)
 #define TOPIC_PREFIX   "pfe-monitor-7f3a"
 
-// Brochage
+// Pinout
 #define PIN_DHT        15
 #define PIN_CURRENT    34
 #define PIN_LED_OK     25
@@ -75,7 +75,7 @@
 #define PIN_BUZZER     14
 #define PIN_BUTTON     13
 
-// Seuils (warning / critique) + hystérésis
+// Thresholds (warning / critical) + hysteresis
 #define TEMP_WARN      60.0f   // °C
 #define TEMP_CRIT      75.0f
 #define TEMP_HYST       2.0f
@@ -86,17 +86,17 @@
 #define CURR_CRIT       4.5f
 #define CURR_HYST       0.2f
 
-// ACS712-05B : 185 mV/A, alimenté en 5 V. Sur ESP32 (3,3 V) on passe par un
-// pont diviseur 3,3/5 → zéro à 1,65 V et sensibilité 185*0,66 = 122 mV/A.
+// ACS712-05B: 185 mV/A, powered at 5 V. On the ESP32 (3.3 V) a 3.3/5 voltage
+// divider is used → zero at 1.65 V and sensitivity 185*0.66 = 122 mV/A.
 #define ACS_ZERO_V      1.65f
 #define ACS_SENS_V_A    0.1221f
 
-// Échantillonnage vibration
+// Vibration sampling
 #define VIB_FS_HZ       100
-#define VIB_WINDOW      100    // 1 s de données par fenêtre RMS
+#define VIB_WINDOW      100    // 1 s of data per RMS window
 
 // ----------------------------------------------------------------------------
-//  Types partagés
+//  Shared types
 // ----------------------------------------------------------------------------
 enum Level : uint8_t { LVL_NORMAL = 0, LVL_WARNING = 1, LVL_CRITICAL = 2 };
 static const char *LEVEL_STR[] = {"NORMAL", "WARNING", "CRITICAL"};
@@ -104,7 +104,7 @@ static const char *LEVEL_STR[] = {"NORMAL", "WARNING", "CRITICAL"};
 struct SensorData {
   float temperature;   // °C
   float humidity;      // %
-  float vibRms;        // g (composante dynamique)
+  float vibRms;        // g (dynamic component)
   float vibPeak;       // g
   float current;       // A
   bool  dhtOk;
@@ -117,43 +117,43 @@ struct Telemetry {
   SensorData s;
   Level tempLvl, vibLvl, currLvl, global;
   bool faultInjected;
-  float   aiScore;       // IA embarquée : score d'anomalie 0..1
-  uint8_t aiAnomaly;     // anomalie confirmée par l'IA
+  float   aiScore;       // on-device AI: anomaly score 0..1
+  uint8_t aiAnomaly;     // anomaly confirmed by the AI
   uint8_t aiCause;       // TINYML_CAUSE_*
 };
 
 // ----------------------------------------------------------------------------
-//  Objets globaux / primitives RTOS
+//  Global objects / RTOS primitives
 // ----------------------------------------------------------------------------
 DHTesp dht;
 Adafruit_MPU6050 mpu;
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 #if MQTT_USE_TLS
-WiFiClientSecure wifiClient;   // TLS : connexion chiffrée + certificat vérifié
+WiFiClientSecure wifiClient;   // TLS: encrypted connection + verified certificate
 #else
 WiFiClient wifiClient;
 #endif
 PubSubClient mqtt(wifiClient);
 
-SemaphoreHandle_t i2cMutex;      // bus I2C partagé MPU/OLED
-SemaphoreHandle_t dataMutex;     // protège g_sensors et g_last
-SemaphoreHandle_t buttonSem;     // donné par l'ISR du bouton
+SemaphoreHandle_t i2cMutex;      // I2C bus shared by MPU/OLED
+SemaphoreHandle_t dataMutex;     // protects g_sensors and g_last
+SemaphoreHandle_t buttonSem;     // given by the button ISR
 QueueHandle_t     telemetryQueue;
 
 SensorData g_sensors = {};
 Telemetry  g_last    = {};
-volatile bool g_faultMode  = false;  // injection de panne (bouton ou MQTT)
+volatile bool g_faultMode  = false;  // fault injection (button or MQTT)
 volatile bool g_buzzerMute = false;
 volatile bool g_mqttUp     = false;
 
 char topicTelemetry[64], topicCmd[64], topicStatus[64];
 
 // ----------------------------------------------------------------------------
-//  Utilitaires
+//  Utilities
 // ----------------------------------------------------------------------------
 static Level evalLevel(float v, float warn, float crit, float hyst, Level prev) {
-  // Hystérésis : on ne redescend d'un niveau que si la valeur passe sous
-  // (seuil - hyst). Évite le clignotement des alarmes autour du seuil.
+  // Hysteresis: only drop one level when the value falls below
+  // (threshold - hyst). Prevents alarms from flickering around the threshold.
   if (v >= crit) return LVL_CRITICAL;
   if (prev == LVL_CRITICAL && v >= crit - hyst) return LVL_CRITICAL;
   if (v >= warn) return LVL_WARNING;
@@ -168,7 +168,7 @@ static void IRAM_ATTR onButtonISR() {
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : acquisition vibration (MPU6050, 100 Hz, RMS glissant sur 1 s)
+//  Task: vibration acquisition (MPU6050, 100 Hz, RMS over a 1 s window)
 // ----------------------------------------------------------------------------
 void taskVibration(void *) {
   static float window[VIB_WINDOW];
@@ -178,7 +178,7 @@ void taskVibration(void *) {
   const TickType_t period = pdMS_TO_TICKS(1000 / VIB_FS_HZ);
 
   for (;;) {
-    vTaskDelayUntil(&last, period);   // période stricte, sans dérive
+    vTaskDelayUntil(&last, period);   // strict period, no drift
     sensors_event_t a, g, t;
     bool ok = false;
     if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
@@ -187,14 +187,14 @@ void taskVibration(void *) {
     }
     if (!ok) continue;
 
-    // Norme de l'accélération en g, moins la gravité → partie dynamique
+    // Acceleration magnitude in g, minus gravity → dynamic part
     float mag = sqrtf(a.acceleration.x * a.acceleration.x +
                       a.acceleration.y * a.acceleration.y +
                       a.acceleration.z * a.acceleration.z) / 9.80665f;
     float dyn = mag - 1.0f;
 
     if (g_faultMode) {
-      // Panne simulée : balourd à 25 Hz + bruit
+      // Simulated fault: 25 Hz imbalance + noise
       dyn += 0.9f * sinf(2.0f * PI * 25.0f * n / VIB_FS_HZ) +
              0.1f * ((float)random(-100, 100) / 100.0f);
     }
@@ -202,10 +202,9 @@ void taskVibration(void *) {
     idx = (idx + 1) % VIB_WINDOW;
     n++;
 
-    if (idx == 0) {                    // fenêtre pleine → RMS + crête
-      // RMS de la composante alternative : on retire la moyenne de la
-      // fenêtre (gravité, inclinaison, offset du capteur) pour ne garder
-      // que la vibration réelle.
+    if (idx == 0) {                    // window full → RMS + peak
+      // RMS of the AC component: the window mean (gravity, tilt, sensor
+      // offset) is removed so that only the actual vibration remains.
       float mean = 0, sum = 0, peak = 0;
       for (int i = 0; i < VIB_WINDOW; i++) mean += window[i];
       mean /= VIB_WINDOW;
@@ -224,19 +223,19 @@ void taskVibration(void *) {
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : température/humidité (DHT22) + courant (ADC)
+//  Task: temperature/humidity (DHT22) + current (ADC)
 // ----------------------------------------------------------------------------
 void taskEnvironment(void *) {
   uint8_t tick = 0;
   for (;;) {
-    // Courant : moyenne de 32 échantillons ADC (filtre le bruit)
+    // Current: average of 32 ADC samples (filters noise)
     uint32_t mv = 0;
     for (int i = 0; i < 32; i++) mv += analogReadMilliVolts(PIN_CURRENT);
     float volts   = (mv / 32.0f) / 1000.0f;
     float current = fabsf((volts - ACS_ZERO_V) / ACS_SENS_V_A);
-    if (g_faultMode) current += 2.5f;   // surintensité simulée
+    if (g_faultMode) current += 2.5f;   // simulated overcurrent
 
-    // DHT22 : pas plus d'une lecture toutes les 2 s
+    // DHT22: no more than one reading every 2 s
     TempAndHumidity th = {NAN, NAN};
     bool readDht = (tick % 10 == 0);
     if (readDht) th = dht.getTempAndHumidity();
@@ -258,7 +257,7 @@ void taskEnvironment(void *) {
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : analyse (1 Hz) → niveaux d'alerte, actionneurs, file de télémétrie
+//  Task: analysis (1 Hz) → alert levels, actuators, telemetry queue
 // ----------------------------------------------------------------------------
 void taskAnalysis(void *) {
   uint32_t seq = 0;
@@ -284,16 +283,16 @@ void taskAnalysis(void *) {
     t.global = (Level)max((int)tL, max((int)vL, (int)cL));
     t.faultInjected = g_faultMode;
 
-    // IA embarquée : le réseau de neurones juge si la combinaison des mesures
-    // ressemble à un fonctionnement normal (détecte ce que les seuils ratent)
+    // On-device AI: the neural network judges whether the combination of
+    // measurements looks like normal operation (catches what thresholds miss)
     if (t.s.dhtOk && tinyml_update(&ai, t.s.temperature, t.s.vibRms, t.s.vibPeak, t.s.current)) {
-      if (ai.anomaly) Serial.printf("[IA] anomalie detectee (cause probable : %s, score %.2f)\n",
+      if (ai.anomaly) Serial.printf("[AI] anomaly detected (probable cause: %s, score %.2f)\n",
                                     TINYML_CAUSE_STR[ai.cause], ai.score);
-      else            Serial.println("[IA] retour au fonctionnement normal");
+      else            Serial.println("[AI] back to normal operation");
     }
     t.aiScore = ai.score; t.aiAnomaly = ai.anomaly; t.aiCause = ai.cause;
 
-    // Actionneurs locaux : l'alarme fonctionne même sans réseau
+    // Local actuators: the alarm works even without a network
     digitalWrite(PIN_LED_OK,    t.global == LVL_NORMAL);
     digitalWrite(PIN_LED_WARN,  t.global == LVL_WARNING);
     digitalWrite(PIN_LED_ALARM, t.global == LVL_CRITICAL);
@@ -303,7 +302,7 @@ void taskAnalysis(void *) {
     g_last = t;
     xSemaphoreGive(dataMutex);
 
-    // File pleine (réseau coupé longtemps) → on jette la plus ancienne mesure
+    // Queue full (network down for a long time) → drop the oldest measurement
     if (xQueueSend(telemetryQueue, &t, 0) != pdTRUE) {
       Telemetry dropped;
       xQueueReceive(telemetryQueue, &dropped, 0);
@@ -313,7 +312,7 @@ void taskAnalysis(void *) {
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : bouton "injection de panne" (anti-rebond logiciel)
+//  Task: "fault injection" button (software debounce)
 // ----------------------------------------------------------------------------
 void taskButton(void *) {
   for (;;) {
@@ -321,15 +320,15 @@ void taskButton(void *) {
       vTaskDelay(pdMS_TO_TICKS(50));
       if (digitalRead(PIN_BUTTON) == LOW) {
         g_faultMode = !g_faultMode;
-        Serial.printf("[BTN] Injection de panne : %s\n", g_faultMode ? "ON" : "OFF");
+        Serial.printf("[BTN] Fault injection: %s\n", g_faultMode ? "ON" : "OFF");
       }
-      while (xSemaphoreTake(buttonSem, 0) == pdTRUE) {}  // purge des rebonds
+      while (xSemaphoreTake(buttonSem, 0) == pdTRUE) {}  // flush bounces
     }
   }
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : affichage OLED (2 Hz)
+//  Task: OLED display (2 Hz)
 // ----------------------------------------------------------------------------
 void taskDisplay(void *) {
   for (;;) {
@@ -350,10 +349,10 @@ void taskDisplay(void *) {
       oled.printf("Temp : %5.1f C  %c\n", t.s.temperature, "OWC"[t.tempLvl]);
       oled.printf("Hum  : %5.1f %%\n", t.s.humidity);
       oled.printf("Vib  : %5.2f g   %c\n", t.s.vibRms, "OWC"[t.vibLvl]);
-      oled.printf("Cour.: %5.2f A   %c\n", t.s.current, "OWC"[t.currLvl]);
+      oled.printf("Curr : %5.2f A   %c\n", t.s.current, "OWC"[t.currLvl]);
       oled.setTextSize(1);
       oled.setCursor(0, 54);
-      oled.printf("Etat:%s IA:%s", LEVEL_STR[t.global], t.aiAnomaly ? "ANOM" : "ok");
+      oled.printf("Lvl:%s AI:%s", LEVEL_STR[t.global], t.aiAnomaly ? "ANOM" : "ok");
       oled.display();
       xSemaphoreGive(i2cMutex);
     }
@@ -362,14 +361,14 @@ void taskDisplay(void *) {
 }
 
 // ----------------------------------------------------------------------------
-//  MQTT : commandes reçues (topic .../cmd)
+//  MQTT: received commands (topic .../cmd)
 //    "fault_on" | "fault_off" | "mute" | "unmute"
 // ----------------------------------------------------------------------------
 void onMqttMessage(char *topic, byte *payload, unsigned int len) {
   String cmd;
   for (unsigned i = 0; i < len; i++) cmd += (char)payload[i];
   cmd.trim();
-  Serial.printf("[MQTT] Commande reçue : %s\n", cmd.c_str());
+  Serial.printf("[MQTT] Command received: %s\n", cmd.c_str());
   if (cmd == "fault_on")  g_faultMode = true;
   else if (cmd == "fault_off") g_faultMode = false;
   else if (cmd == "mute")   g_buzzerMute = true;
@@ -395,7 +394,7 @@ static bool publishTelemetry(const Telemetry &t) {
   JsonObject h = doc["health"].to<JsonObject>();
   h["dht"] = t.s.dhtOk;
   h["mpu"] = t.s.mpuOk;
-  JsonObject a = doc["ai"].to<JsonObject>();      // verdict de l'IA embarquée
+  JsonObject a = doc["ai"].to<JsonObject>();      // on-device AI verdict
   a["score"]   = roundf(t.aiScore * 1000) / 1000;
   a["anomaly"] = (bool)t.aiAnomaly;
   a["cause"]   = TINYML_CAUSE_STR[t.aiCause];
@@ -406,11 +405,11 @@ static bool publishTelemetry(const Telemetry &t) {
 }
 
 // ----------------------------------------------------------------------------
-//  Tâche : connectivité Wi-Fi + MQTT, publication, reconnexion automatique
+//  Task: Wi-Fi + MQTT connectivity, publishing, automatic reconnection
 // ----------------------------------------------------------------------------
 void taskMqtt(void *) {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS, 6);   // canal 6 = démarrage rapide sur Wokwi
+  WiFi.begin(WIFI_SSID, WIFI_PASS, 6);   // channel 6 = fast startup on Wokwi
 #if MQTT_USE_TLS
   wifiClient.setCACert(ISRG_ROOT_X1);
 #endif
@@ -422,34 +421,34 @@ void taskMqtt(void *) {
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
       g_mqttUp = false;
-      Serial.println("[WiFi] connexion...");
+      Serial.println("[WiFi] connecting...");
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
     if (!mqtt.connected()) {
       g_mqttUp = false;
       String cid = String("esp32-") + DEVICE_ID + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-      // Last Will : le broker publie "offline" si l'ESP32 disparaît
+      // Last Will: the broker publishes "offline" if the ESP32 disappears
       if (mqtt.connect(cid.c_str(), MQTT_USER[0] ? MQTT_USER : nullptr, MQTT_PASS[0] ? MQTT_PASS : nullptr,
                        topicStatus, 1, true, "offline")) {
         mqtt.publish(topicStatus, "online", true);
         mqtt.subscribe(topicCmd);
         g_mqttUp = true;
         backoffMs = 1000;
-        Serial.printf("[MQTT] connecté à %s — topic %s\n", MQTT_HOST, topicTelemetry);
+        Serial.printf("[MQTT] connected to %s — topic %s\n", MQTT_HOST, topicTelemetry);
       } else {
-        Serial.printf("[MQTT] échec rc=%d, nouvel essai dans %lu ms\n", mqtt.state(), backoffMs);
+        Serial.printf("[MQTT] failed rc=%d, retrying in %lu ms\n", mqtt.state(), backoffMs);
         vTaskDelay(pdMS_TO_TICKS(backoffMs));
-        backoffMs = min<uint32_t>(backoffMs * 2, 30000);   // backoff exponentiel
+        backoffMs = min<uint32_t>(backoffMs * 2, 30000);   // exponential backoff
         continue;
       }
     }
     mqtt.loop();
 
-    // Vide la file : publie aussi les mesures accumulées pendant une coupure
+    // Drain the queue: also publishes measurements buffered during an outage
     Telemetry t;
     while (mqtt.connected() && xQueuePeek(telemetryQueue, &t, 0) == pdTRUE) {
-      if (!publishTelemetry(t)) break;          // on garde la mesure pour plus tard
+      if (!publishTelemetry(t)) break;          // keep the measurement for later
       xQueueReceive(telemetryQueue, &t, 0);
     }
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -473,28 +472,28 @@ void setup() {
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   analogReadResolution(12);
-  analogSetPinAttenuation(PIN_CURRENT, ADC_11db);   // plage 0–3,3 V
+  analogSetPinAttenuation(PIN_CURRENT, ADC_11db);   // 0–3.3 V range
 
   i2cMutex       = xSemaphoreCreateMutex();
   dataMutex      = xSemaphoreCreateMutex();
   buttonSem      = xSemaphoreCreateBinary();
-  telemetryQueue = xQueueCreate(30, sizeof(Telemetry));   // ≈30 s de tampon
+  telemetryQueue = xQueueCreate(30, sizeof(Telemetry));   // ≈30 s of buffering
 
   Wire.begin(21, 22);
   Wire.setClock(400000);
   dht.setup(PIN_DHT, DHTesp::DHT22);
 
-  if (!mpu.begin()) Serial.println("[ERR] MPU6050 introuvable");
+  if (!mpu.begin()) Serial.println("[ERR] MPU6050 not found");
   else {
     mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
     mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
   }
-  if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("[ERR] OLED introuvable");
+  if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("[ERR] OLED not found");
   else { oled.clearDisplay(); oled.display(); }
 
   attachInterrupt(digitalPinToInterrupt(PIN_BUTTON), onButtonISR, FALLING);
 
-  //            fonction          nom       pile  param prio  handle  cœur
+  //            function          name      stack param prio  handle  core
   xTaskCreatePinnedToCore(taskVibration,   "vib",     4096, NULL, 4, NULL, 1);
   xTaskCreatePinnedToCore(taskEnvironment, "env",     4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(taskAnalysis,    "analysis",4096, NULL, 3, NULL, 1);
@@ -504,11 +503,11 @@ void setup() {
 }
 
 void loop() {
-  // Tout est géré par les tâches FreeRTOS ; loop() sert juste de moniteur.
+  // Everything is handled by the FreeRTOS tasks; loop() is just a monitor.
   static uint32_t lastLog = 0;
   if (millis() - lastLog > 5000) {
     lastLog = millis();
-    Serial.printf("[SYS] heap libre=%u  file=%u  faute=%d\n", ESP.getFreeHeap(),
+    Serial.printf("[SYS] free heap=%u  queue=%u  fault=%d\n", ESP.getFreeHeap(),
                   uxQueueMessagesWaiting(telemetryQueue), g_faultMode);
   }
   vTaskDelay(pdMS_TO_TICKS(100));

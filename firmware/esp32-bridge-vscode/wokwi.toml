@@ -2,6 +2,6 @@
 version = 1
 firmware = '.pio/build/esp32/firmware.bin'
 elf = '.pio/build/esp32/firmware.elf'
-# Port série de l'ESP32 exposé sur localhost:4200 : le "câble virtuel"
-# (backend/tools/virtual-cable.js) le relie au port 4100 du STM32
+# ESP32 serial port exposed on localhost:4200: the "virtual cable"
+# (backend/tools/virtual-cable.js) connects it to the STM32's port 4100
 rfc2217ServerPort = 4200

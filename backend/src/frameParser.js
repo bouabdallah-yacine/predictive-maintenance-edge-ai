@@ -1,6 +1,6 @@
 // ============================================================================
-//  Parseur des trames UART du STM32 — portage JS de firmware/stm32/.../protocol.c
-//  $MM,<seq>,<temp×10>,<hum×10>,<vib mg>,<crête mg>,<courant mA>,<flags>*<XOR hex>
+//  STM32 UART frame parser — JS port of firmware/stm32/.../protocol.c
+//  $MM,<seq>,<temp×10>,<hum×10>,<vib mg>,<peak mg>,<current mA>,<flags>*<XOR hex>
 // ============================================================================
 const LEVELS = ['NORMAL', 'WARNING', 'CRITICAL'];
 
@@ -12,7 +12,7 @@ export class FrameParser {
     this.stats = { ok: 0, errChecksum: 0, errFormat: 0 };
   }
 
-  /** Donne un caractère ; renvoie un objet télémétrie quand une trame valide est complète. */
+  /** Feeds one character; returns a telemetry object once a valid frame is complete. */
   feed(ch) {
     if (ch === '$') { this.state = 'BODY'; this.body = ''; this.cs = ''; return null; }
     if (this.state === 'BODY') {
@@ -50,17 +50,17 @@ export class FrameParser {
 }
 
 /**
- * Filtre Telnet : le port série de Wokwi est exposé en RFC2217 (protocole
- * Telnet). On retire les séquences de négociation (octet IAC = 255) pour ne
- * garder que les données.
+ * Telnet filter: the Wokwi serial port is exposed over RFC2217 (Telnet
+ * protocol). Negotiation sequences (IAC byte = 255) are stripped so that only
+ * the data remains.
  */
 export class TelnetFilter {
   constructor() { this.st = 'DATA'; this.cmd = 0; this.replies = []; }
 
   /**
-   * Filtre un bloc reçu ; renvoie le texte utile. Les réponses de négociation
-   * à renvoyer au serveur sont accumulées dans this.replies (voir takeReplies).
-   * On accepte BINARY (0) et SUPPRESS-GO-AHEAD (3), on refuse le reste.
+   * Filters a received chunk; returns the payload text. Negotiation replies to
+   * send back to the server are accumulated in this.replies (see takeReplies).
+   * BINARY (0) and SUPPRESS-GO-AHEAD (3) are accepted, everything else is refused.
    */
   push(buf) {
     let out = '';
@@ -70,7 +70,7 @@ export class TelnetFilter {
         case 'IAC':
           if (b === 255) { out += '\xff'; this.st = 'DATA'; }
           else if (b >= 251 && b <= 254) { this.cmd = b; this.st = 'OPT'; }  // WILL/WONT/DO/DONT
-          else if (b === 250) this.st = 'SB';                                  // sous-négociation
+          else if (b === 250) this.st = 'SB';                                  // subnegotiation
           else this.st = 'DATA';
           break;
         case 'OPT': {

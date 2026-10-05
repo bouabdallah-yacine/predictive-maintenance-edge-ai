@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install numpy && python ai/train_model.py      # entraîne + génère le modèle C
+      - run: pip install numpy && python ai/train_model.py      # trains + generates the C model
       - run: gcc -O2 -Wall -Wextra -Werror -I ai ai/test_tinyml.c -lm -o t && ./t   # C == Python
 
   esp32:
@@ -50,7 +50,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
           arduino-cli lib install PubSubClient ArduinoJson "DHT sensor library for ESPx" "Adafruit MPU6050" "Adafruit Unified Sensor" "Adafruit GFX Library" "Adafruit SSD1306"
-      # arduino-cli exige que le .ino porte le nom du dossier (Wokwi impose sketch.ino)
+      # arduino-cli requires the .ino to be named after its folder (Wokwi requires sketch.ino)
       - run: mkdir -p /tmp/sketch && cp firmware/esp32-wokwi/sketch.ino firmware/esp32-wokwi/*.h /tmp/sketch/ && arduino-cli compile --fqbn esp32:esp32:esp32 /tmp/sketch
       - run: arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32-bridge
 

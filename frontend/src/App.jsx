@@ -7,7 +7,7 @@ import AlertList from './components/AlertList.jsx';
 import StatusBanner from './components/StatusBanner.jsx';
 import AiCard from './components/AiCard.jsx';
 
-const MAX_POINTS = 300;          // 5 min à 1 Hz
+const MAX_POINTS = 300;          // 5 min at 1 Hz
 const DEFAULT_THRESHOLDS = {
   temperature: { warn: 60, crit: 75, unit: '°C' },
   vibRms: { warn: 0.3, crit: 0.6, unit: 'g' },
@@ -19,13 +19,13 @@ export default function App() {
   const [devices, setDevices] = useState({});        // id → { online, lastSeen }
   const [selected, setSelected] = useState(null);
   const [series, setSeries] = useState({});          // id → [points]
-  const [latest, setLatest] = useState({});          // id → dernier point enrichi
+  const [latest, setLatest] = useState({});          // id → latest enriched point
   const [alerts, setAlerts] = useState([]);
   const [conn, setConn] = useState({ socket: false, broker: false });
   const selectedRef = useRef(null);
   selectedRef.current = selected;
 
-  // Chargement initial + temps réel
+  // Initial load + real time
   useEffect(() => {
     api.config().then((c) => setThresholds(c.thresholds)).catch(() => {});
     api.alerts(50).then(setAlerts).catch(() => {});
@@ -55,7 +55,7 @@ export default function App() {
     return () => socket.close();
   }, []);
 
-  // Historique lors du changement de machine
+  // Load history when the selected machine changes
   useEffect(() => {
     if (!selected) return;
     api.telemetry(selected, 5).then((rows) => {
@@ -79,18 +79,18 @@ export default function App() {
           <span className="logo">⚙</span>
           <div>
             <h1>Machine Monitor</h1>
-            <p>Surveillance industrielle &amp; détection d'anomalies</p>
+            <p>Industrial monitoring &amp; anomaly detection</p>
           </div>
         </div>
         <div className="conn">
-          <Dot ok={conn.socket} label="Serveur" />
+          <Dot ok={conn.socket} label="Server" />
           <Dot ok={conn.broker} label="Broker MQTT" />
           <ThemeToggle />
         </div>
       </header>
 
       <nav className="devices">
-        {deviceList.length === 0 && <span className="muted">En attente d'une machine… (lance Wokwi ou le simulateur)</span>}
+        {deviceList.length === 0 && <span className="muted">Waiting for a machine… (start Wokwi or the simulator)</span>}
         {deviceList.map((d) => (
           <button key={d.deviceId}
                   className={`device ${d.deviceId === selected ? 'active' : ''}`}
@@ -105,34 +105,34 @@ export default function App() {
       <StatusBanner last={last} online={devices[selected]?.online} />
 
       <section className="kpis">
-        <KpiCard label="Température" value={last?.temperature} unit="°C" digits={1}
+        <KpiCard label="Temperature" value={last?.temperature} unit="°C" digits={1}
                  level={last?.levels?.temperature} data={data} dataKey="temperature" />
-        <KpiCard label="Humidité" value={last?.humidity} unit="%" digits={1} data={data} dataKey="humidity" />
+        <KpiCard label="Humidity" value={last?.humidity} unit="%" digits={1} data={data} dataKey="humidity" />
         <KpiCard label="Vibration (RMS)" value={last?.vibRms} unit="g" digits={3}
                  level={last?.levels?.vibRms} data={data} dataKey="vibRms" extra={last?.zscores?.vibRms != null ? `z = ${last.zscores.vibRms}` : null} />
-        <KpiCard label="Courant" value={last?.current} unit="A" digits={2}
+        <KpiCard label="Current" value={last?.current} unit="A" digits={2}
                  level={last?.levels?.current} data={data} dataKey="current" />
       </section>
 
       <main className="grid">
         <div className="charts">
-          <MetricChart title="Température" unit="°C" data={data} dataKey="temperature" color="var(--c-temp)" th={thresholds.temperature} />
+          <MetricChart title="Temperature" unit="°C" data={data} dataKey="temperature" color="var(--c-temp)" th={thresholds.temperature} />
           <MetricChart title="Vibration RMS" unit="g" data={data} dataKey="vibRms" color="var(--c-vib)" th={thresholds.vibRms} secondKey="vibPeak" />
-          <MetricChart title="Courant moteur" unit="A" data={data} dataKey="current" color="var(--c-cur)" th={thresholds.current} />
+          <MetricChart title="Motor current" unit="A" data={data} dataKey="current" color="var(--c-cur)" th={thresholds.current} />
         </div>
 
         <aside className="side">
           <AiCard last={last} data={data} />
           <div className="card controls">
-            <h3>Commandes</h3>
+            <h3>Commands</h3>
             <div className="btns">
-              <button onClick={() => sendCmd('fault_on')} className="danger">Injecter une panne</button>
-              <button onClick={() => sendCmd('fault_off')}>Arrêter la panne</button>
-              <button onClick={() => sendCmd('mute')}>Couper le buzzer</button>
+              <button onClick={() => sendCmd('fault_on')} className="danger">Inject a fault</button>
+              <button onClick={() => sendCmd('fault_off')}>Stop the fault</button>
+              <button onClick={() => sendCmd('mute')}>Mute the buzzer</button>
               <a className="button" href={selected ? api.exportUrl(selected) : '#'}>Export CSV (1 h)</a>
             </div>
             {last?.etaCriticalMin != null && (
-              <p className="eta">🔮 Surchauffe estimée dans <b>{last.etaCriticalMin} min</b></p>
+              <p className="eta">🔮 Overheating expected in <b>{last.etaCriticalMin} min</b></p>
             )}
           </div>
           <AlertList alerts={deviceAlerts} unacked={unacked} onAck={ack} />
@@ -155,7 +155,7 @@ function toPoint(t) {
   };
 }
 
-// Thème clair / sombre : suit le système, le bouton force l'un ou l'autre (mémorisé)
+// Light / dark theme: follows the system; the button forces one or the other (remembered)
 function ThemeToggle() {
   const sys = () => (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   const [theme, setTheme] = useState(() => {
@@ -163,12 +163,12 @@ function ThemeToggle() {
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem('theme', theme); } catch { /* navigation privée */ }
+    try { localStorage.setItem('theme', theme); } catch { /* private browsing */ }
   }, [theme]);
   const next = theme === 'dark' ? 'light' : 'dark';
   return (
-    <button id="theme" onClick={() => setTheme(next)} title={next === 'light' ? 'Passer en mode clair' : 'Passer en mode sombre'}
-            aria-label="Changer de thème">{theme === 'dark' ? '☀' : '☾'}</button>
+    <button id="theme" onClick={() => setTheme(next)} title={next === 'light' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label="Toggle theme">{theme === 'dark' ? '☀' : '☾'}</button>
   );
 }
 

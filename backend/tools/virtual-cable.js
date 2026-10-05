@@ -1,14 +1,14 @@
 // ============================================================================
-//  Câble UART virtuel entre deux simulations Wokwi
+//  Virtual UART cable between two Wokwi simulations
 //
-//    Simulation STM32 (port 4100)  ⇄  ce programme  ⇄  Simulation ESP32 (port 4200)
+//    STM32 simulation (port 4100)  ⇄  this program  ⇄  ESP32 simulation (port 4200)
 //
-//  Chaque simulation expose son port série en RFC2217 (Telnet). On retire la
-//  négociation Telnet et on recopie les octets utiles dans les deux sens,
-//  exactement comme les fils TX/RX d'un vrai câble.
+//  Each simulation exposes its serial port over RFC2217 (Telnet). The Telnet
+//  negotiation is stripped and the payload bytes are copied in both directions,
+//  exactly like the TX/RX wires of a real cable.
 //
-//  Usage (dossier backend) :  npm run cable
-//  Options : --stm32 4100 --esp32 4200
+//  Usage (backend folder):  npm run cable
+//  Options: --stm32 4100 --esp32 4200
 // ============================================================================
 import net from 'node:net';
 import { TelnetFilter } from '../src/frameParser.js';
@@ -19,7 +19,7 @@ const PORTS = { STM32: Number(arg('stm32', 4100)), ESP32: Number(arg('esp32', 42
 const ends = {};
 const stats = { 'STM32→ESP32': 0, 'ESP32→STM32': 0 };
 
-// Telnet : l'octet 255 dans les données doit être doublé (IAC IAC)
+// Telnet: byte 255 in the data must be doubled (IAC IAC)
 const escapeIac = (s) => Buffer.from(s, 'latin1').toString('latin1').replace(/\xff/g, '\xff\xff');
 
 function connect(name) {
@@ -30,7 +30,7 @@ function connect(name) {
 
   sock.on('connect', () => {
     ends[name] = sock;
-    console.log(`[CÂBLE] ${name} connecté (port ${PORTS[name]})${ends[other] ? ' — câble branché des deux côtés ✅' : ''}`);
+    console.log(`[CABLE] ${name} connected (port ${PORTS[name]})${ends[other] ? ' — cable plugged in on both ends ✅' : ''}`);
   });
 
   sock.on('data', (buf) => {
@@ -43,7 +43,7 @@ function connect(name) {
       dest.write(Buffer.from(escapeIac(text), 'latin1'));
       stats[`${name}→${other}`] += text.length;
     }
-    // Affiche les messages texte ("# ...") des deux cartes
+    // Print the text messages ("# ...") from both boards
     for (const ch of text) {
       if (ch === '\n') { if (line.startsWith('#')) console.log(`[${name}] ${line.trim()}`); line = ''; }
       else if (ch !== '\r') line += ch;
@@ -51,13 +51,13 @@ function connect(name) {
   });
 
   sock.on('error', (e) => {
-    if (e.code === 'ECONNREFUSED') console.log(`[CÂBLE] ${name} injoignable (port ${PORTS[name]}) — simulation lancée et visible ?`);
-    else console.log(`[CÂBLE] ${name} : ${e.message}`);
+    if (e.code === 'ECONNREFUSED') console.log(`[CABLE] ${name} unreachable (port ${PORTS[name]}) — is the simulation running and visible?`);
+    else console.log(`[CABLE] ${name}: ${e.message}`);
   });
 
   sock.on('close', () => {
     if (ends[name] === sock) delete ends[name];
-    setTimeout(() => connect(name), 2000);       // rebranchement automatique
+    setTimeout(() => connect(name), 2000);       // automatic reconnection
   });
 }
 
@@ -65,6 +65,6 @@ connect('STM32');
 connect('ESP32');
 
 setInterval(() => {
-  const s = Object.entries(stats).map(([k, v]) => `${k}: ${v} o`).join('  |  ');
-  process.stdout.write(`\r[CÂBLE] ${s}   `);
+  const s = Object.entries(stats).map(([k, v]) => `${k}: ${v} B`).join('  |  ');
+  process.stdout.write(`\r[CABLE] ${s}   `);
 }, 2000);

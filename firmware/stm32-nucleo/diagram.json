@@ -109,7 +109,7 @@
       "left": -240,
       "attrs": {
         "color": "red",
-        "label": "Panne"
+        "label": "Fault"
       }
     },
     {

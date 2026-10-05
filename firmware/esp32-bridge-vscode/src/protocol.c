@@ -1,6 +1,6 @@
 /**
  * @file    protocol.c
- * @brief   Encodage / décodage des trames UART (voir protocol.h).
+ * @brief   Encoding / decoding of UART frames (see protocol.h).
  */
 #include "protocol.h"
 #include <stdlib.h>
@@ -8,7 +8,7 @@
 
 static const char HEX[] = "0123456789ABCDEF";
 
-/* Écrit un entier en décimal (sans printf : léger et déterministe). */
+/* Writes an integer in decimal (no printf: lightweight and deterministic). */
 static char *put_int(char *p, const char *end, int32_t v)
 {
   char tmp[12];
@@ -25,7 +25,7 @@ size_t proto_encode(const proto_frame_t *f, char *out, size_t out_size)
 {
   if (!f || !out || out_size < 16) return 0;
 
-  const char *end = out + out_size - 5;          /* place pour CS, \r\n, \0 */
+  const char *end = out + out_size - 5;          /* room for CS, \r\n, \0 */
   const int32_t fields[7] = { f->seq, f->temp_d, f->hum_d, f->vib_mg,
                               f->peak_mg, f->curr_ma, f->flags };
   char *p = out;
@@ -38,7 +38,7 @@ size_t proto_encode(const proto_frame_t *f, char *out, size_t out_size)
   }
   if (p >= end) return 0;
 
-  uint8_t cs = 0;                                 /* XOR entre '$' et '*' */
+  uint8_t cs = 0;                                 /* XOR between '$' and '*' */
   for (char *q = out + 1; q < p; q++) cs ^= (uint8_t)*q;
 
   *p++ = '*';
@@ -64,7 +64,7 @@ static int hexval(char c)
   return -1;
 }
 
-/* Découpe "MM,a,b,c,d,e,f,g" en champs et vérifie les bornes. */
+/* Splits "MM,a,b,c,d,e,f,g" into fields and checks the bounds. */
 static int parse_body(const char *body, proto_frame_t *out)
 {
   if (strncmp(body, "MM,", 3) != 0) return 0;
@@ -73,7 +73,7 @@ static int parse_body(const char *body, proto_frame_t *out)
   for (int i = 0; i < 7; i++) {
     char *end;
     v[i] = strtol(s, &end, 10);
-    if (end == s) return 0;                          /* champ vide */
+    if (end == s) return 0;                          /* empty field */
     if (i < 6 && *end != ',') return 0;
     if (i == 6 && *end != '\0') return 0;
     s = end + 1;
@@ -95,7 +95,7 @@ static int parse_body(const char *body, proto_frame_t *out)
 
 int proto_parser_feed(proto_parser_t *p, char c, proto_frame_t *out)
 {
-  /* Un '$' relance toujours la synchronisation (resynchro après bruit) */
+  /* A '$' always restarts synchronisation (resync after noise) */
   if (c == '$') {
     p->state = PROTO_IN_BODY;
     p->len = 0;

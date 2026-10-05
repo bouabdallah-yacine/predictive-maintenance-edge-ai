@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Passerelle UART → MQTT
-======================
-Joue le rôle de l'ESP32 quand le STM32 est simulé sous Renode (ou branché en USB) :
-lit les trames "$MM,...*CS" et publie le même JSON que le firmware ESP32.
+UART → MQTT gateway
+===================
+Stands in for the ESP32 when the STM32 is simulated in Renode (or plugged in over USB):
+reads "$MM,...*CS" frames and publishes the same JSON as the ESP32 firmware.
 
   python uart_gateway.py --tcp localhost:3456          # Renode
-  python uart_gateway.py --serial COM5                 # vraie carte (Windows)
-  python uart_gateway.py --serial /dev/ttyACM0         # vraie carte (Linux)
-  python uart_gateway.py --stdin < trames.txt          # test hors ligne
+  python uart_gateway.py --serial COM5                 # real board (Windows)
+  python uart_gateway.py --serial /dev/ttyACM0         # real board (Linux)
+  python uart_gateway.py --stdin < frames.txt          # offline test
 
-Dépendances : pip install paho-mqtt pyserial
+Dependencies: pip install paho-mqtt pyserial
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ LEVELS = ["NORMAL", "WARNING", "CRITICAL"]
 
 
 class FrameParser:
-    """Parseur à états, identique à Core/Src/protocol.c."""
+    """State-machine parser, identical to Core/Src/protocol.c."""
 
     def __init__(self):
         self.state = "WAIT"
@@ -79,7 +79,7 @@ class FrameParser:
 
 
 def byte_source(args):
-    """Générateur de caractères selon la source choisie (reconnexion auto)."""
+    """Character generator for the selected source (auto-reconnect)."""
     if args.stdin:
         for line in sys.stdin:
             yield from line
@@ -87,7 +87,7 @@ def byte_source(args):
     if args.serial:
         import serial  # pyserial
         with serial.Serial(args.serial, args.baud, timeout=1) as port:
-            print(f"[GW] port série {args.serial} @ {args.baud}")
+            print(f"[GW] serial port {args.serial} @ {args.baud}")
             while True:
                 data = port.read(64)
                 yield from data.decode("ascii", errors="ignore")
@@ -95,7 +95,7 @@ def byte_source(args):
     while True:
         try:
             with socket.create_connection((host, int(port)), timeout=5) as s:
-                print(f"[GW] connecté à Renode {host}:{port}")
+                print(f"[GW] connected to Renode {host}:{port}")
                 s.settimeout(None)
                 while True:
                     data = s.recv(256)
@@ -103,22 +103,22 @@ def byte_source(args):
                         break
                     yield from data.decode("ascii", errors="ignore")
         except OSError as e:
-            print(f"[GW] Renode injoignable ({e}), nouvel essai dans 2 s...")
+            print(f"[GW] Renode unreachable ({e}), retrying in 2 s...")
             time.sleep(2)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Passerelle UART → MQTT")
+    ap = argparse.ArgumentParser(description="UART → MQTT gateway")
     src = ap.add_mutually_exclusive_group()
-    src.add_argument("--tcp", default="localhost:3456", help="hôte:port du terminal Renode")
-    src.add_argument("--serial", help="port série (COM5, /dev/ttyACM0...)")
-    src.add_argument("--stdin", action="store_true", help="lit les trames sur l'entrée standard")
+    src.add_argument("--tcp", default="localhost:3456", help="host:port of the Renode terminal")
+    src.add_argument("--serial", help="serial port (COM5, /dev/ttyACM0...)")
+    src.add_argument("--stdin", action="store_true", help="read frames from standard input")
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--broker", default="broker.hivemq.com")
     ap.add_argument("--port", type=int, default=1883)
     ap.add_argument("--prefix", default="pfe-monitor-7f3a")
     ap.add_argument("--device", default="stm32-01")
-    ap.add_argument("--dry-run", action="store_true", help="affiche le JSON sans publier")
+    ap.add_argument("--dry-run", action="store_true", help="print the JSON without publishing")
     args = ap.parse_args()
 
     client = None
@@ -143,7 +143,7 @@ def main():
         if not frame:
             continue
         if last_seq is not None and frame["seq"] != (last_seq + 1) % 65536:
-            print(f"[GW] ⚠ trame(s) perdue(s) : {last_seq} → {frame['seq']}")
+            print(f"[GW] ⚠ lost frame(s): {last_seq} → {frame['seq']}")
         last_seq = frame["seq"]
         frame["deviceId"] = args.device
         frame["uptimeMs"] = int((time.time() - t0) * 1000)
@@ -152,7 +152,7 @@ def main():
             client.publish(topic, payload)
         print(payload)
 
-    print(f"[GW] fin : {parser.ok} trames OK, {parser.err_cs} err. checksum, {parser.err_fmt} err. format")
+    print(f"[GW] done: {parser.ok} frames OK, {parser.err_cs} checksum errors, {parser.err_fmt} format errors")
 
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 // ============================================================================
-//  Simulateur de machine — publie exactement le même JSON que l'ESP32.
-//  Permet de développer/démontrer le backend et le dashboard sans Wokwi.
+//  Machine simulator — publishes exactly the same JSON as the ESP32.
+//  Lets you develop / demo the backend and the dashboard without Wokwi.
 //
-//  Usage :
-//    node simulator.js                       → scénario "demo" (enchaîne tout)
+//  Usage:
+//    node simulator.js                       → "demo" scenario (runs through everything)
 //    node simulator.js --scenario overheat   → normal | overheat | bearing | overcurrent | demo
-//    node simulator.js --devices 3           → plusieurs machines
-//  Touches pendant l'exécution : [n]ormal [o]verheat [b]earing [c]urrent [q]uitter
+//    node simulator.js --devices 3           → several machines
+//  Keys while running: [n]ormal [o]verheat [b]earing [c]urrent [d]emo [q]uit
 // ============================================================================
 import mqtt from 'mqtt';
 
@@ -27,23 +27,23 @@ class Machine {
     this.id = id;
     this.seq = 0;
     this.t0 = Date.now();
-    this.temp = 38 + Math.random() * 4;   // état thermique (inertie)
-    this.wear = 0;                         // usure roulement 0..1
-    this.fault = false;                    // commande MQTT fault_on
+    this.temp = 38 + Math.random() * 4;   // thermal state (inertia)
+    this.wear = 0;                         // bearing wear 0..1
+    this.fault = false;                    // MQTT fault_on command
     this.phaseStart = Date.now();
   }
 
   currentScenario() {
     if (this.fault) return 'overcurrent';
     if (scenario !== 'demo') return scenario;
-    // Démo : cycle de 4 min — normal, surchauffe, roulement, surintensité
+    // Demo: 4-minute cycle — normal, overheating, bearing, overcurrent
     const s = ((Date.now() - this.t0) / 1000) % 240;
     return s < 60 ? 'normal' : s < 120 ? 'overheat' : s < 180 ? 'bearing' : s < 210 ? 'overcurrent' : 'normal';
   }
 
   step() {
     const sc = this.currentScenario();
-    // Thermique : premier ordre vers une température cible
+    // Thermal: first-order response towards a target temperature
     const target = sc === 'overheat' ? 90 : sc === 'overcurrent' ? 55 : 40;
     this.temp += (target - this.temp) * (sc === 'overheat' ? 0.02 : 0.05) + gauss() * 0.15;
 
@@ -84,19 +84,19 @@ const machines = Array.from({ length: N_DEVICES }, (_, i) => new Machine(`machin
 const client = mqtt.connect(MQTT_URL, {
   clientId: `simulator-${Math.random().toString(16).slice(2, 8)}`,
   will: { topic: `${TOPIC_PREFIX}/${machines[0].id}/status`, payload: 'offline', retain: true },
-  // Broker privé : identifiant / mot de passe (vides = broker public)
+  // Private broker: username / password (empty = public broker)
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
 });
 
 client.on('connect', () => {
-  console.log(`[SIM] connecté à ${MQTT_URL} — préfixe "${TOPIC_PREFIX}" — ${N_DEVICES} machine(s) — scénario ${scenario}`);
+  console.log(`[SIM] connected to ${MQTT_URL} — prefix "${TOPIC_PREFIX}" — ${N_DEVICES} machine(s) — scenario ${scenario}`);
   for (const m of machines) {
     client.publish(`${TOPIC_PREFIX}/${m.id}/status`, 'online', { retain: true });
     client.subscribe(`${TOPIC_PREFIX}/${m.id}/cmd`);
   }
 });
-client.on('error', (e) => console.error('[SIM] erreur MQTT :', e.message));
+client.on('error', (e) => console.error('[SIM] MQTT error:', e.message));
 
 client.on('message', (topic, payload) => {
   const id = topic.split('/')[1];
@@ -105,7 +105,7 @@ client.on('message', (topic, payload) => {
   if (!m) return;
   if (cmd === 'fault_on') m.fault = true;
   if (cmd === 'fault_off') m.fault = false;
-  console.log(`[SIM] ${id} commande reçue : ${cmd}`);
+  console.log(`[SIM] ${id} command received: ${cmd}`);
 });
 
 setInterval(() => {
@@ -122,14 +122,14 @@ setInterval(() => {
   }
 }, 1000);
 
-// Contrôle clavier
+// Keyboard control
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.on('data', (k) => {
     const key = k.toString();
     const map = { n: 'normal', o: 'overheat', b: 'bearing', c: 'overcurrent', d: 'demo' };
-    if (map[key]) { scenario = map[key]; console.log(`\n[SIM] scénario → ${scenario}`); }
+    if (map[key]) { scenario = map[key]; console.log(`\n[SIM] scenario → ${scenario}`); }
     if (key === 'q' || key === '\u0003') {
       client.publish(`${TOPIC_PREFIX}/${machines[0].id}/status`, 'offline', { retain: true }, () => process.exit(0));
     }

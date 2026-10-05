@@ -4,7 +4,7 @@ import { MachineAnalyzer, RollingStats, levelFor } from '../src/anomaly.js';
 
 const normal = (i) => ({ temperature: 40 + Math.sin(i) * 0.5, vibRms: 0.05 + (i % 3) * 0.005, current: 1.5 + (i % 2) * 0.05 });
 
-test('niveaux par seuil', () => {
+test('threshold levels', () => {
   assert.equal(levelFor('temperature', 50), 'NORMAL');
   assert.equal(levelFor('temperature', 65), 'WARNING');
   assert.equal(levelFor('temperature', 80), 'CRITICAL');
@@ -12,7 +12,7 @@ test('niveaux par seuil', () => {
   assert.equal(levelFor('vibRms', undefined), 'NORMAL');
 });
 
-test('RollingStats : moyenne, écart-type, pente', () => {
+test('RollingStats: mean, standard deviation, slope', () => {
   const s = new RollingStats(5);
   [1, 2, 3, 4, 5, 6].forEach((x) => s.push(x));
   assert.equal(s.n, 5);
@@ -23,44 +23,44 @@ test('RollingStats : moyenne, écart-type, pente', () => {
   assert.ok(Math.abs(t.slope() - 2) < 1e-9);
 });
 
-test('aucune alerte en fonctionnement normal', () => {
+test('no alert during normal operation', () => {
   const a = new MachineAnalyzer();
   let events = [];
   for (let i = 0; i < 120; i++) events = events.concat(a.analyze(normal(i)).events);
   assert.deepEqual(events, []);
 });
 
-test('une seule alerte par changement d\'état, puis retour à la normale', () => {
+test('a single alert per state change, then back to normal', () => {
   const a = new MachineAnalyzer();
   for (let i = 0; i < 30; i++) a.analyze(normal(i));
   const e1 = a.analyze({ ...normal(30), vibRms: 0.7 }).events;
   assert.ok(e1.some((e) => e.kind === 'THRESHOLD' && e.metric === 'vibRms' && e.severity === 'CRITICAL'));
   const e2 = a.analyze({ ...normal(31), vibRms: 0.72 }).events;
-  assert.equal(e2.filter((e) => e.metric === 'vibRms').length, 0, 'pas de doublon');
+  assert.equal(e2.filter((e) => e.metric === 'vibRms').length, 0, 'no duplicate');
   const e3 = a.analyze(normal(32)).events;
   assert.ok(e3.some((e) => e.kind === 'RECOVERY' && e.metric === 'vibRms'));
 });
 
-test('z-score : détecte un saut sous le seuil', () => {
+test('z-score: detects a jump below the threshold', () => {
   const a = new MachineAnalyzer();
   for (let i = 0; i < 40; i++) a.analyze(normal(i));
-  const r = a.analyze({ ...normal(40), vibRms: 0.2 });   // < 0,3 g mais x4
+  const r = a.analyze({ ...normal(40), vibRms: 0.2 });   // < 0.3 g but x4
   assert.equal(r.levels.vibRms, 'NORMAL');
   assert.ok(r.events.some((e) => e.kind === 'STATISTICAL' && e.metric === 'vibRms'));
 });
 
-test('prédictif : montée de température → ETA avant surchauffe', () => {
+test('predictive: rising temperature → ETA before overheating', () => {
   const a = new MachineAnalyzer();
   let pred = null, r;
   for (let i = 0; i < 60; i++) {
     r = a.analyze({ ...normal(i), temperature: 40 + i * 0.05 });   // +3 °C/min
     pred = pred ?? r.events.find((e) => e.kind === 'PREDICTIVE');
   }
-  assert.ok(pred, 'alerte prédictive émise');
+  assert.ok(pred, 'predictive alert raised');
   assert.ok(r.etaCriticalMin > 5 && r.etaCriticalMin < 15, `eta=${r.etaCriticalMin}`);
 });
 
-test('prédictif : pas d\'alerte après un saut brutal au-dessus du seuil', () => {
+test('predictive: no alert after a sudden jump above the threshold', () => {
   const a = new MachineAnalyzer();
   for (let i = 0; i < 30; i++) a.analyze(normal(i));
   let events = [];

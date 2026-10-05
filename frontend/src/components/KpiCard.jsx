@@ -1,6 +1,6 @@
 import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
 
-const LABEL = { NORMAL: 'Normal', WARNING: 'Attention', CRITICAL: 'Critique' };
+const LABEL = { NORMAL: 'Normal', WARNING: 'Warning', CRITICAL: 'Critical' };
 
 export default function KpiCard({ label, value, unit, digits = 1, level, data, dataKey, extra }) {
   const lv = level ?? 'NONE';

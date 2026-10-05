@@ -1,22 +1,22 @@
 # ============================================================================
-#  Renode : exécute le vrai firmware STM32 (.elf compilé par STM32CubeIDE)
-#  Lancement :  renode renode/machine_monitor.resc
-#  Puis, dans un autre terminal :  python gateway/uart_gateway.py --tcp localhost:3456
+#  Renode: runs the real STM32 firmware (.elf built by STM32CubeIDE)
+#  Launch:  renode renode/machine_monitor.resc
+#  Then, in another terminal:  python gateway/uart_gateway.py --tcp localhost:3456
 # ============================================================================
 using sysbus
 $name?="machine-monitor"
 mach create $name
 
-# Carte STM32F4 Discovery (STM32F407) — crée ton projet CubeIDE pour cette carte
+# STM32F4 Discovery board (STM32F407) — create your CubeIDE project for this board
 machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
 
-# Chemin du binaire (modifiable : renode -e '$bin=@/chemin/vers/firmware.elf')
+# Binary path (can be overridden: renode -e '$bin=@/path/to/firmware.elf')
 $bin?=@Debug/machine_monitor.elf
 
-# USART2 = console de debug → fenêtre d'analyse Renode
+# USART2 = debug console → Renode analyzer window
 showAnalyzer sysbus.usart2
 
-# USART1 = liaison "ESP32" → exposée sur le port TCP 3456 pour la passerelle
+# USART1 = "ESP32" link → exposed on TCP port 3456 for the gateway
 emulation CreateServerSocketTerminal 3456 "esp32_link" false
 connector Connect sysbus.usart1 esp32_link
 

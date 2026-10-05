@@ -9,7 +9,7 @@
   --warn: #f59e0b;
   --crit: #ef4444;
   --accent: #38bdf8;
-  /* couleurs secondaires (thème sombre par défaut) */
+  /* secondary colours (dark theme by default) */
   --btn: #1b2530; --alert-bg: #0f161e; --sim-bg: #1e293b; --pill-off: #4b5563;
   --tag-n-bg: #14532d; --tag-n-fg: #86efac; --tag-w-bg: #78350f; --tag-w-fg: #fcd34d; --tag-c-bg: #7f1d1d; --tag-c-fg: #fca5a5;
   --ban-n-bg: #0f2a1a; --ban-w-bg: #2a1d08; --ban-c-bg: #2d0f0f; --ban-o-bg: #1f2329; --ban-o-bd: #374151; --ban-o-fg: #9ca3af;
@@ -19,7 +19,7 @@
   color: var(--text);
   background: var(--bg);
 }
-/* Thème clair : suit le système, ou forcé par le bouton (data-theme) */
+/* Light theme: follows the system, or forced by the button (data-theme) */
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
   --bg: #f2f4f7; --card: #ffffff; --border: #d9dee5; --grid: #e6eaef; --text: #17202a; --muted: #5d6b7a;
   --ok: #15803d; --warn: #b45309; --crit: #c42b2b; --accent: #0369a1;
@@ -119,7 +119,7 @@ button.danger { background: var(--danger-bg); border-color: var(--tag-c-bg); }
   .kpis { grid-template-columns: 1fr; }
 }
 
-/* --- IA embarquée ------------------------------------------------------- */
+/* --- Edge AI ------------------------------------------------------------ */
 .ai { color: var(--accent); }
 .ai h3 { margin: 0; font-size: 14px; color: var(--text); }
 .ai.ai-ok { color: var(--ok); }

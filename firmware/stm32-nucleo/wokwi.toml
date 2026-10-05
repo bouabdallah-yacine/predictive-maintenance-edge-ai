@@ -2,6 +2,6 @@
 version = 1
 firmware = '.pio/build/nucleo/firmware.bin'
 elf = '.pio/build/nucleo/firmware.elf'
-# Le port série du STM32 (USART2, PA2/PA3) est exposé sur localhost:4100
-# → la passerelle backend/tools/stm32-gateway.js le lit et publie en MQTT
+# The STM32 serial port (USART2, PA2/PA3) is exposed on localhost:4100
+# → the backend/tools/stm32-gateway.js gateway reads it and publishes over MQTT
 rfc2217ServerPort = 4100

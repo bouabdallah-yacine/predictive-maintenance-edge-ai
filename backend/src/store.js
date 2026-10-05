@@ -1,6 +1,6 @@
 // ============================================================================
-//  Persistance : MongoDB (Mongoose) avec repli en mémoire si Mongo est absent.
-//  Le repli permet de lancer la démo sans rien installer d'autre que Node.
+//  Persistence: MongoDB (Mongoose) with an in-memory fallback when Mongo is unavailable.
+//  The fallback lets you run the demo with nothing installed but Node.
 // ============================================================================
 import mongoose from 'mongoose';
 
@@ -12,16 +12,16 @@ const telemetrySchema = new mongoose.Schema({
   vibRms:      Number,
   vibPeak:     Number,
   current:     Number,
-  state:       String,          // état global calculé par le serveur
-  deviceState: String,          // état annoncé par le firmware
+  state:       String,          // overall state computed by the server
+  deviceState: String,          // state reported by the firmware
   zscores:     Object,
   faultInjected: Boolean,
-  aiScore:     Number,          // IA embarquée : score d'anomalie 0..1
+  aiScore:     Number,          // edge AI: anomaly score 0..1
   aiAnomaly:   Boolean,
   aiCause:     String,
 }, { versionKey: false });
 telemetrySchema.index({ deviceId: 1, ts: -1 });
-// Rétention automatique : 7 jours (index TTL)
+// Automatic retention: 7 days (TTL index)
 telemetrySchema.index({ ts: 1 }, { expireAfterSeconds: 7 * 24 * 3600 });
 
 const alertSchema = new mongoose.Schema({
@@ -130,13 +130,13 @@ export async function createStore(url) {
   if (url) {
     try {
       await mongoose.connect(url, { serverSelectionTimeoutMS: 4000 });
-      console.log(`[DB] MongoDB connecté (${mongoose.connection.name})`);
+      console.log(`[DB] MongoDB connected (${mongoose.connection.name})`);
       return new MongoStore();
     } catch (e) {
-      console.warn(`[DB] MongoDB injoignable (${e.message}) → stockage en mémoire`);
+      console.warn(`[DB] MongoDB unreachable (${e.message}) → in-memory storage`);
     }
   } else {
-    console.warn('[DB] MONGO_URL non défini → stockage en mémoire');
+    console.warn('[DB] MONGO_URL not set → in-memory storage');
   }
   return new MemoryStore();
 }

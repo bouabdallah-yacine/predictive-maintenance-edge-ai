@@ -1,37 +1,37 @@
-# 🤖 IA embarquée (TinyML) : détection d'anomalies sur l'ESP32
+# 🤖 On-device AI (TinyML): anomaly detection on the ESP32
 
-Un petit **réseau de neurones (4 → 16 → 16 → 1, 369 poids, ≈ 1,5 Ko)** tourne directement
-dans l'ESP32 et donne, pour chaque mesure, un **score d'anomalie** entre 0 et 1.
+A small **neural network (4 → 16 → 16 → 1, 369 weights, ≈ 1.5 KB)** runs directly
+on the ESP32 and outputs, for each measurement, an **anomaly score** between 0 and 1.
 
-## Pourquoi, en plus des seuils ?
+## Why, on top of thresholds?
 
-Les seuils regardent chaque grandeur **séparément**. L'IA regarde la **combinaison** :
+Thresholds look at each quantity **separately**. The AI looks at the **combination**:
 
-| Situation | Seuils (60 °C / 0,3 g / 3,5 A) | IA embarquée |
+| Situation | Thresholds (60 °C / 0.3 g / 3.5 A) | On-device AI |
 |---|---|---|
-| 45 °C alors que le moteur ne consomme rien (refroidissement HS) | ✅ normal | 🚨 anomalie (température) |
-| 15 °C alors que le moteur consomme 3 A (capteur défaillant) | ✅ normal | 🚨 anomalie (température) |
-| Crête de vibration = 5 × RMS (chocs : roulement abîmé) | ✅ normal | 🚨 anomalie (vibration) |
-| Fonctionnement normal (24 °C à l'arrêt, 40 °C à 2,5 A…) | ✅ normal | ✅ normal |
+| 45 °C while the motor draws no current (cooling failure) | ✅ normal | 🚨 anomaly (temperature) |
+| 15 °C while the motor draws 3 A (faulty sensor) | ✅ normal | 🚨 anomaly (temperature) |
+| Vibration peak = 5 × RMS (shocks: damaged bearing) | ✅ normal | 🚨 anomaly (vibration) |
+| Normal operation (24 °C when stopped, 40 °C at 2.5 A…) | ✅ normal | ✅ normal |
 
-## Comment ça marche
+## How it works
 
-1. **Données** : un modèle physique de la machine génère des mesures de fonctionnement
-   normal (échauffement ∝ courant², vibration liée à la charge, facteur de crête sain).
-2. **Entraînement** (`train_model.py`, NumPy seulement) : le réseau apprend à distinguer ces
-   mesures normales de mesures tirées au hasard : il apprend la *forme* de la zone normale.
-   Seuil : 0,5 → **0,04 % de fausses alertes** sur des données normales jamais vues.
-3. **Export** : les poids sont écrits en C dans `tinyml_model.h`.
-4. **Inférence** (`tinyml.h`, C pur, sans bibliothèque) : ≈ 600 multiplications par mesure.
-   Anti-rebond (3 mesures consécutives) et **explication** : la grandeur qui, ramenée à une
-   valeur normale, fait le plus baisser le score est donnée comme « cause probable ».
-5. Le verdict part en MQTT (`"ai": {"score", "anomaly", "cause"}`) → alerte dans le
-   dashboard et sur Telegram.
+1. **Data**: a physical model of the machine generates normal-operation measurements
+   (heating ∝ current², load-dependent vibration, healthy crest factor).
+2. **Training** (`train_model.py`, NumPy only): the network learns to tell these normal
+   measurements apart from randomly drawn ones, so it learns the *shape* of the normal zone.
+   Threshold: 0.5 → **0.04 % false alarms** on unseen normal data.
+3. **Export**: the weights are written as C code in `tinyml_model.h`.
+4. **Inference** (`tinyml.h`, plain C, no library): ≈ 600 multiplications per measurement.
+   Debounce (3 consecutive measurements) and **explanation**: the quantity which, brought
+   back to a normal value, lowers the score the most is reported as the "probable cause".
+5. The verdict is sent over MQTT (`"ai": {"score", "anomaly", "cause"}`) → alert in the
+   dashboard and on Telegram.
 
-## Commandes
+## Commands
 
 ```bash
 pip install numpy
-python ai/train_model.py                                    # entraîne et copie le modèle dans les firmwares
-gcc -O2 -Wall -I ai ai/test_tinyml.c -lm -o t && ./t        # vérifie : C == Python
+python ai/train_model.py                                    # trains and copies the model into the firmwares
+gcc -O2 -Wall -I ai ai/test_tinyml.c -lm -o t && ./t        # checks: C == Python
 ```

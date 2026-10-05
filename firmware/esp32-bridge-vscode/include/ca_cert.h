@@ -1,15 +1,15 @@
 /*
- * Certificats racines de confiance pour la connexion MQTT TLS (port 8883).
- * Ils permettent à l'ESP32 de VÉRIFIER qu'il parle bien au vrai broker
- * (comme un navigateur avec un site HTTPS) : protection contre l'usurpation.
- * Plusieurs racines sont regroupées pour fonctionner avec plusieurs brokers :
+ * Trusted root certificates for the MQTT TLS connection (port 8883).
+ * They let the ESP32 VERIFY that it is really talking to the genuine broker
+ * (like a browser with an HTTPS site): protection against impersonation.
+ * Several roots are bundled so that several brokers work:
  *   - ISRG Root X1             (HiveMQ Cloud, Let's Encrypt)
  *     SHA-256 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6
  *   - DigiCert Global Root G2  (EMQX Cloud Serverless)
  *     SHA-256 CB:3C:CB:B7:60:31:E5:E0:13:8F:8D:D3:9A:23:F9:DE:47:FF:C3:5E:43:C1:14:4C:EA:27:D4:6A:5A:B1:CB:5F
- *   - DigiCert Global Root CA  (EMQX, ancien certificat)
+ *   - DigiCert Global Root CA  (EMQX, legacy certificate)
  *     SHA-256 43:48:A0:E9:44:4C:78:CB:26:5E:05:8D:5E:89:44:B4:D8:4F:96:62:BD:26:DB:25:7F:89:34:A4:43:C7:01:61
- * Ce sont des certificats PUBLICS : aucun secret ici.
+ * These are PUBLIC certificates: no secrets here.
  */
 #pragma once
 
@@ -93,5 +93,5 @@ static const char MQTT_ROOT_CA[] =
   "CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=\n"
   "-----END CERTIFICATE-----\n";
 
-// Ancien nom, gardé pour compatibilité
+// Legacy name, kept for compatibility
 #define ISRG_ROOT_X1 MQTT_ROOT_CA

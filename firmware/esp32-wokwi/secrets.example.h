@@ -1,13 +1,13 @@
 /*
- * Copie ce fichier en "secrets.h" (même dossier) et remplis tes identifiants
- * du broker privé (EMQX Cloud Serverless ou HiveMQ Cloud).
- * secrets.h est exclu de GitHub (.gitignore) : tes mots de passe ne seront
- * jamais publiés.
- * Sans secrets.h, le firmware utilise le broker public broker.hivemq.com
- * (sans mot de passe ni chiffrement) : pratique pour tester, pas pour la production.
+ * Copy this file to "secrets.h" (same folder) and fill in your private
+ * broker credentials (EMQX Cloud Serverless or HiveMQ Cloud).
+ * secrets.h is excluded from GitHub (.gitignore): your passwords will
+ * never be published.
+ * Without secrets.h, the firmware uses the public broker broker.hivemq.com
+ * (no password, no encryption): handy for testing, not for production.
  */
 #pragma once
-#define MQTT_HOST     "xxxxxxxx.ala.eu-central-1.emqxsl.com"  // adresse du broker (EMQX : "Address" / HiveMQ : "Cluster URL")
-#define MQTT_USE_TLS  1                                       // chiffrement TLS (port 8883)
-#define MQTT_USER     "esp32"                                 // identifiant créé sur le broker
-#define MQTT_PASS     "ton-mot-de-passe"
+#define MQTT_HOST     "xxxxxxxx.ala.eu-central-1.emqxsl.com"  // broker address (EMQX: "Address" / HiveMQ: "Cluster URL")
+#define MQTT_USE_TLS  1                                       // TLS encryption (port 8883)
+#define MQTT_USER     "esp32"                                 // username created on the broker
+#define MQTT_PASS     "your-password"

@@ -1,25 +1,24 @@
 /**
  * @file    protocol.h
- * @brief   Trame UART STM32 → ESP32 (format texte type NMEA, avec checksum).
+ * @brief   STM32 → ESP32 UART frame (NMEA-style text format, with checksum).
  *
  *  $MM,<seq>,<temp_d>,<hum_d>,<vib_mg>,<peak_mg>,<curr_ma>,<flags>*<CS>\r\n
  *
- *   seq      : compteur 0..65535 (détecte les trames perdues)
- *   temp_d   : température en dixièmes de °C (ex. 253 = 25,3 °C), signé
- *   hum_d    : humidité en dixièmes de %
- *   vib_mg   : vibration RMS en milli-g
- *   peak_mg  : vibration crête en milli-g
- *   curr_ma  : courant en mA
- *   flags    : bit0 DHT ok | bit1 MPU ok | bit2 panne simulée
- *              bits 4-5 niveau global (0 normal, 1 warning, 2 critique)
- *   CS       : XOR de tous les octets entre '$' et '*', en hexadécimal (2 car.)
+ *   seq      : counter 0..65535 (detects lost frames)
+ *   temp_d   : temperature in tenths of °C (e.g. 253 = 25.3 °C), signed
+ *   hum_d    : humidity in tenths of %
+ *   vib_mg   : RMS vibration in milli-g
+ *   peak_mg  : peak vibration in milli-g
+ *   curr_ma  : current in mA
+ *   flags    : bit0 DHT ok | bit1 MPU ok | bit2 simulated fault
+ *              bits 4-5 overall level (0 normal, 1 warning, 2 critical)
+ *   CS       : XOR of all bytes between '$' and '*', in hexadecimal (2 chars)
  *
- *  Pourquoi des entiers ? printf("%f") est désactivé par défaut avec
- *  newlib-nano (économie de ~10 Ko de flash) et les entiers se décodent sans
- *  ambiguïté. Exemple :
+ *  Why integers? printf("%f") is disabled by default in newlib-nano
+ *  (saves ~10 KB of flash) and integers decode unambiguously. Example:
  *    $MM,42,253,451,85,140,1620,3*20\r\n
  *
- *  Ce module est du C pur (aucune dépendance HAL) → testé sur PC (test/).
+ *  This module is plain C (no HAL dependency) → tested on a PC (test/).
  */
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
@@ -62,22 +61,22 @@ typedef struct {
   uint8_t  cs_calc;
   char     cs_txt[2];
   uint8_t  cs_len;
-  /* statistiques */
+  /* statistics */
   uint32_t ok_count;
   uint32_t err_checksum;
   uint32_t err_format;
 } proto_parser_t;
 
-/** Encode une trame. Retourne la longueur écrite (sans '\0'), 0 si erreur. */
+/** Encodes a frame. Returns the length written (excluding '\0'), 0 on error. */
 size_t proto_encode(const proto_frame_t *f, char *out, size_t out_size);
 
-/** Initialise le parseur. */
+/** Initialises the parser. */
 void proto_parser_init(proto_parser_t *p);
 
 /**
- * Fournit un octet reçu au parseur (appelable depuis une tâche qui lit un
- * ring buffer rempli par l'ISR UART). Retourne 1 quand une trame valide
- * complète a été décodée dans *out, 0 sinon.
+ * Feeds one received byte to the parser (callable from a task reading a
+ * ring buffer filled by the UART ISR). Returns 1 when a complete, valid
+ * frame has been decoded into *out, 0 otherwise.
  */
 int proto_parser_feed(proto_parser_t *p, char c, proto_frame_t *out);
 

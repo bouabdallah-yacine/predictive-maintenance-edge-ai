@@ -1,7 +1,7 @@
 {
   "name": "machine-monitor-backend",
   "version": "1.0.0",
-  "description": "MQTT -> détection d'anomalies -> MongoDB -> Socket.io",
+  "description": "MQTT -> anomaly detection -> MongoDB -> Socket.io",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

@@ -1,31 +1,31 @@
 // ============================================================================
-//  Aide à la configuration Telegram : affiche ton CHAT_ID et envoie un test.
-//  1) Crée un bot avec @BotFather, copie le token dans .env (TELEGRAM_TOKEN=...)
-//  2) Envoie "bonjour" à ton bot depuis Telegram
-//  3) Lance : npm run telegram
+//  Telegram setup helper: prints your CHAT_ID and sends a test message.
+//  1) Create a bot with @BotFather, copy the token into .env (TELEGRAM_TOKEN=...)
+//  2) Send "hello" to your bot from Telegram
+//  3) Run: npm run telegram
 // ============================================================================
 import 'dotenv/config';
 
 const TOKEN = process.env.TELEGRAM_TOKEN;
 if (!TOKEN) {
-  console.log('❌ TELEGRAM_TOKEN absent du fichier .env (voir les instructions en haut de ce fichier).');
+  console.log('❌ TELEGRAM_TOKEN missing from the .env file (see the instructions at the top of this file).');
   process.exit(1);
 }
 const r = await fetch(`https://api.telegram.org/bot${TOKEN}/getUpdates`);
 const data = await r.json();
-if (!data.ok) { console.log('❌ Token refusé par Telegram :', data.description); process.exit(1); }
+if (!data.ok) { console.log('❌ Token rejected by Telegram:', data.description); process.exit(1); }
 const chats = [...new Map(data.result
   .map((u) => u.message?.chat).filter(Boolean)
   .map((c) => [c.id, c])).values()];
 if (!chats.length) {
-  console.log('⚠️  Aucun message reçu. Envoie "bonjour" à ton bot dans Telegram, puis relance cette commande.');
+  console.log('⚠️  No message received. Send "hello" to your bot in Telegram, then run this command again.');
   process.exit(0);
 }
-for (const c of chats) console.log(`✅ CHAT_ID trouvé : ${c.id}  (${c.first_name ?? c.title ?? ''})`);
+for (const c of chats) console.log(`✅ CHAT_ID found: ${c.id}  (${c.first_name ?? c.title ?? ''})`);
 const chatId = process.env.TELEGRAM_CHAT_ID ?? chats[0].id;
 await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ chat_id: chatId, text: '✅ Machine Monitor est connecté à Telegram !' }),
+  body: JSON.stringify({ chat_id: chatId, text: '✅ Machine Monitor is connected to Telegram!' }),
 });
-console.log(`\n→ Ajoute dans backend/.env :  TELEGRAM_CHAT_ID=${chatId}`);
-console.log('→ Un message de test vient d\'être envoyé sur ton Telegram.');
+console.log(`\n→ Add to backend/.env:  TELEGRAM_CHAT_ID=${chatId}`);
+console.log('→ A test message has just been sent to your Telegram.');

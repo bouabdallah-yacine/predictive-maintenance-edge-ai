@@ -1,9 +1,9 @@
-<title>Machine Monitor IA</title>
+<title>Machine Monitor AI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-/* Layout : panneau d'instrumentation — commandes à gauche, carte de décision à droite, verdicts comparés dessous */
+/* Layout: instrumentation panel — controls on the left, decision map on the right, compared verdicts below */
 :root{
   --bg:#eef1ef; --panel:#ffffff; --ink:#132022; --muted:#5b6a6b; --line:#d3dbd8; --grid:#e3e9e6;
   --ok:#0e7f62; --warn:#c77700; --crit:#c2392b; --accent:#c77700; --chip:#e4ebe8;
@@ -88,35 +88,35 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">Projet IoT · maintenance prédictive · TinyML</div>
+    <div class="eyebrow">IoT project · predictive maintenance · TinyML</div>
     <h1>Machine Monitor</h1>
-    <p class="lede">Un réseau de neurones de 369 poids, exécuté directement dans un ESP32, surveille une machine industrielle. Il détecte des pannes naissantes que les seuils d'alarme classiques ne voient pas. Testez-le ci-dessous : c'est le même modèle que dans la carte.</p>
+    <p class="lede">A 369-weight neural network, running directly on an ESP32, monitors an industrial machine. It detects emerging faults that conventional alarm thresholds miss. Try it below: it is the same model as the one on the board.</p>
     <div class="specs">
-      <span><b>369</b> poids</span><span><b>1,5 Ko</b> en flash</span><span><b>~600</b> multiplications / mesure</span><span><b>0,04 %</b> de fausses alertes</span><span>C pur, <b>sans bibliothèque</b></span>
+      <span><b>369</b> weights</span><span><b>1.5 KB</b> of flash</span><span><b>~600</b> multiplications / measurement</span><span><b>0.04%</b> false alarms</span><span>Plain C, <b>no library</b></span>
     </div>
   </header>
 
-  <section class="lab" aria-label="Démo interactive">
+  <section class="lab" aria-label="Interactive demo">
     <div class="panel ctrl">
-      <h3>Capteurs de la machine</h3>
-      <div class="slider"><label for="t">Température <output id="to"></output></label><input id="t" type="range" min="0" max="90" step="0.5" value="24"><small>Sonde NTC sur le carter moteur</small></div>
-      <div class="slider"><label for="c">Courant moteur <output id="co"></output></label><input id="c" type="range" min="0" max="6" step="0.05" value="0"><small>Capteur à effet Hall ACS712</small></div>
-      <div class="slider"><label for="r">Vibration RMS <output id="ro"></output></label><input id="r" type="range" min="0" max="1" step="0.005" value="0"><small>Accéléromètre MPU6050, fenêtre 1 s à 100 Hz</small></div>
-      <div class="slider"><label for="p">Vibration crête <output id="po"></output></label><input id="p" type="range" min="0" max="2" step="0.005" value="0"><small>Une crête très supérieure au RMS signale des chocs</small></div>
+      <h3>Machine sensors</h3>
+      <div class="slider"><label for="t">Temperature <output id="to"></output></label><input id="t" type="range" min="0" max="90" step="0.5" value="24"><small>NTC probe on the motor housing</small></div>
+      <div class="slider"><label for="c">Motor current <output id="co"></output></label><input id="c" type="range" min="0" max="6" step="0.05" value="0"><small>ACS712 Hall-effect sensor</small></div>
+      <div class="slider"><label for="r">Vibration RMS <output id="ro"></output></label><input id="r" type="range" min="0" max="1" step="0.005" value="0"><small>MPU6050 accelerometer, 1 s window at 100 Hz</small></div>
+      <div class="slider"><label for="p">Peak vibration <output id="po"></output></label><input id="p" type="range" min="0" max="2" step="0.005" value="0"><small>A peak far above the RMS indicates shocks</small></div>
       <div>
-        <h3 style="margin-bottom:8px">Scénarios</h3>
+        <h3 style="margin-bottom:8px">Scenarios</h3>
         <div class="scen" id="scen"></div>
       </div>
     </div>
 
     <div class="panel">
-      <h3>Ce que voit chaque méthode · température × courant</h3>
-      <div class="mapbox"><canvas id="map" role="img" aria-label="Carte du score d'anomalie de l'IA selon la température et le courant, avec le rectangle accepté par les seuils"></canvas></div>
+      <h3>What each method sees · temperature × current</h3>
+      <div class="mapbox"><canvas id="map" role="img" aria-label="Map of the AI anomaly score by temperature and current, with the rectangle accepted by the thresholds"></canvas></div>
       <div class="legend">
-        <span><i style="background:var(--ok);opacity:.35"></i>zone normale apprise par l'IA</span>
-        <span><i style="background:var(--crit);opacity:.35"></i>anomalie selon l'IA</span>
-        <span><i style="border:2px dashed var(--ink);width:14px;height:10px"></i>zone acceptée par les seuils (60 °C, 3,5 A)</span>
-        <span><i style="background:var(--ink);border-radius:50%"></i>mesure actuelle</span>
+        <span><i style="background:var(--ok);opacity:.35"></i>normal zone learned by the AI</span>
+        <span><i style="background:var(--crit);opacity:.35"></i>anomaly according to the AI</span>
+        <span><i style="border:2px dashed var(--ink);width:14px;height:10px"></i>zone accepted by the thresholds (60 °C, 3.5 A)</span>
+        <span><i style="background:var(--ink);border-radius:50%"></i>current measurement</span>
       </div>
     </div>
   </section>
@@ -125,42 +125,42 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 
   <section class="verdicts" aria-live="polite">
     <div class="panel verdict" id="vt">
-      <div class="vhead"><h2>Seuils classiques</h2><span class="pill" id="vtp"></span></div>
-      <div class="vbody"><p>Chaque capteur est comparé à sa limite, séparément.</p>
+      <div class="vhead"><h2>Conventional thresholds</h2><span class="pill" id="vtp"></span></div>
+      <div class="vbody"><p>Each sensor is compared with its own limit, separately.</p>
         <div class="rows" id="vtrows"></div></div>
     </div>
     <div class="panel verdict" id="va">
-      <div class="vhead"><h2>IA embarquée</h2><span class="pill" id="vap"></span></div>
+      <div class="vhead"><h2>Edge AI</h2><span class="pill" id="vap"></span></div>
       <div class="vbody"><p id="vamsg"></p>
-        <div class="score"><b id="vas"></b><span class="slider"><small>score d'anomalie (seuil 50 %)</small></span></div>
+        <div class="score"><b id="vas"></b><span class="slider"><small>anomaly score (threshold 50%)</small></span></div>
         <div class="bar"><span id="vabar"></span><i></i></div></div>
     </div>
   </section>
 
   <section style="display:flex;flex-direction:column;gap:14px">
-    <h2>Comment l'IA a été construite</h2>
+    <h2>How the AI was built</h2>
     <div class="how">
-      <div class="step"><span class="n">1 · Données</span><strong>Modèle physique</strong><p>Des milliers de mesures de fonctionnement sain : l'échauffement suit le carré du courant, la vibration suit la charge.</p></div>
-      <div class="step"><span class="n">2 · Entraînement</span><strong>Python + NumPy</strong><p>Le réseau 4→16→16→1 apprend à séparer le normal de mesures tirées au hasard. Il apprend la forme de la zone saine.</p></div>
-      <div class="step"><span class="n">3 · Export</span><strong>Code C embarqué</strong><p>Les poids deviennent un tableau C. L'inférence est écrite à la main et vérifiée contre Python à 0,001 près.</p></div>
-      <div class="step"><span class="n">4 · Décision</span><strong>Sur l'ESP32</strong><p>Anti-rebond sur 3 mesures, cause probable expliquée, alerte envoyée au tableau de bord et sur Telegram.</p></div>
+      <div class="step"><span class="n">1 · Data</span><strong>Physical model</strong><p>Thousands of healthy-operation measurements: heating follows the square of the current, vibration follows the load.</p></div>
+      <div class="step"><span class="n">2 · Training</span><strong>Python + NumPy</strong><p>The 4→16→16→1 network learns to tell normal data apart from randomly drawn measurements. It learns the shape of the healthy zone.</p></div>
+      <div class="step"><span class="n">3 · Export</span><strong>Embedded C code</strong><p>The weights become a C array. Inference is hand-written and checked against Python to within 0.001.</p></div>
+      <div class="step"><span class="n">4 · Decision</span><strong>On the ESP32</strong><p>Debouncing over 3 measurements, probable cause explained, alert sent to the dashboard and to Telegram.</p></div>
     </div>
   </section>
 
   <section style="display:flex;flex-direction:column;gap:14px">
-    <h2>Architecture complète</h2>
+    <h2>Full architecture</h2>
     <div class="chain"><ol>
-      <li><div class="node"><b>Capteurs</b><span>NTC, HIH-4030, MPU6050, ACS712</span></div></li>
-      <li><div class="node"><b>STM32</b><span>FreeRTOS, 5 tâches temps réel</span><em class="lnk">UART + checksum</em></div></li>
-      <li><div class="node ai"><b>ESP32 + IA</b><span>passerelle, TinyML</span><em class="lnk">Wi-Fi, MQTT TLS</em></div></li>
-      <li><div class="node"><b>Broker privé</b><span>EMQX, mot de passe</span></div></li>
-      <li><div class="node"><b>Node.js</b><span>analyse, MongoDB</span><em class="lnk">Socket.io</em></div></li>
-      <li><div class="node"><b>Dashboard</b><span>React + alertes Telegram</span></div></li>
+      <li><div class="node"><b>Sensors</b><span>NTC, HIH-4030, MPU6050, ACS712</span></div></li>
+      <li><div class="node"><b>STM32</b><span>FreeRTOS, 5 real-time tasks</span><em class="lnk">UART + checksum</em></div></li>
+      <li><div class="node ai"><b>ESP32 + AI</b><span>gateway, TinyML</span><em class="lnk">Wi-Fi, MQTT TLS</em></div></li>
+      <li><div class="node"><b>Private broker</b><span>EMQX, password</span></div></li>
+      <li><div class="node"><b>Node.js</b><span>analysis, MongoDB</span><em class="lnk">Socket.io</em></div></li>
+      <li><div class="node"><b>Dashboard</b><span>React + Telegram alerts</span></div></li>
     </ol></div>
-    <div class="stack"><span>C / C++</span><span>FreeRTOS</span><span>STM32</span><span>ESP32</span><span>MQTT + TLS</span><span>TinyML</span><span>Python / NumPy</span><span>Node.js</span><span>MongoDB</span><span>React</span><span>Docker</span><span>CI GitHub Actions</span></div>
+    <div class="stack"><span>C / C++</span><span>FreeRTOS</span><span>STM32</span><span>ESP32</span><span>MQTT + TLS</span><span>TinyML</span><span>Python / NumPy</span><span>Node.js</span><span>MongoDB</span><span>React</span><span>Docker</span><span>GitHub Actions CI</span></div>
   </section>
 
-  <footer>Démo autonome : le réseau de neurones tourne dans votre navigateur avec exactement les poids embarqués dans l'ESP32. Système complet validé en simulation (Wokwi).</footer>
+  <footer>Standalone demo: the neural network runs in your browser with exactly the same weights as those embedded in the ESP32. Complete system validated in simulation (Wokwi).</footer>
 </div>
 
 <script>
@@ -178,23 +178,23 @@ function score(temp, rms, peak, cur){
   return 1-1/(1+Math.exp(-z));
 }
 function explain(t,r,p,c){
-  const best={temperature:1,vibration:1,courant:1};
+  const best={temperature:1,vibration:1,current:1};
   for(let v=10;v<=60;v+=5) best.temperature=Math.min(best.temperature,score(v,r,p,c));
   for(const v of [0,0.03,0.06,0.1,0.15]) best.vibration=Math.min(best.vibration,score(t,v,v*1.6,c));
-  for(let v=0;v<=4;v+=0.5) best.courant=Math.min(best.courant,score(t,r,p,v));
-  const order=['temperature','vibration','courant'];
+  for(let v=0;v<=4;v+=0.5) best.current=Math.min(best.current,score(t,r,p,v));
+  const order=['temperature','vibration','current'];
   return order.find(k=>best[k]<M.THR*0.6) ?? order.reduce((a,b)=>best[b]<best[a]?b:a);
 }
 const lvl=(v,[w,c])=>v>=c?2:v>=w?1:0;
-const LV=['normal','attention','critique'], CL=['st-ok','st-warn','st-crit'], VC=['','is-warn','is-crit'];
+const LV=['normal','warning','critical'], CL=['st-ok','st-warn','st-crit'], VC=['','is-warn','is-crit'];
 
 const SCEN=[
-  {n:'Normal à l’arrêt', v:[24,0,0,0]},
-  {n:'En charge normale', v:[40,2.5,0.10,0.16]},
-  {n:'Refroidissement en panne', v:[45,0,0,0], why:'La machine est à l’arrêt mais chauffe à 45 °C. Aucun seuil n’est dépassé ; l’IA sait qu’un moteur qui ne consomme rien ne devrait pas chauffer.'},
-  {n:'Sonde de température HS', v:[15,3,0.10,0.17], why:'Le moteur consomme 3 A mais la température reste à 15 °C. Les seuils ne voient rien ; l’IA repère l’incohérence et suspecte la sonde.'},
-  {n:'Roulement abîmé', v:[35,1.5,0.10,0.50], why:'Vibration RMS faible, mais crête 5 fois plus forte : ce sont des chocs. Sous le seuil de 0,3 g, seule l’IA les détecte.'},
-  {n:'Panne complète', v:[59,2.5,0.70,1.0], why:'Ici les deux méthodes déclenchent : la vibration dépasse le seuil critique.'},
+  {n:'Normal, idle', v:[24,0,0,0]},
+  {n:'Normal under load', v:[40,2.5,0.10,0.16]},
+  {n:'Cooling failure', v:[45,0,0,0], why:'The machine is idle but heating up to 45 °C. No threshold is exceeded; the AI knows that a motor drawing no current should not be heating up.'},
+  {n:'Faulty temperature probe', v:[15,3,0.10,0.17], why:'The motor draws 3 A but the temperature stays at 15 °C. The thresholds see nothing; the AI spots the inconsistency and suspects the probe.'},
+  {n:'Damaged bearing', v:[35,1.5,0.10,0.50], why:'Low RMS vibration, but a peak 5 times higher: these are shocks. Below the 0.3 g threshold, only the AI detects them.'},
+  {n:'Complete failure', v:[59,2.5,0.70,1.0], why:'Here both methods trigger: the vibration exceeds the critical threshold.'},
 ];
 const $=id=>document.getElementById(id);
 const ids=['t','c','r','p'];
@@ -222,13 +222,13 @@ function draw(){
   cv.width=Math.round(W*dpr); cv.height=Math.round(Hh*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
   const C=css(), L=44, R=10, T=10, B=34, pw=W-L-R, ph=Hh-T-B;
   ctx.clearRect(0,0,W,Hh);
-  // champ de score
+  // score field
   const img=document.createElement('canvas'); img.width=GX; img.height=GY; const ic=img.getContext('2d'); const id=ic.createImageData(GX,GY);
   const ok=hexRgb(C.ok), cr=hexRgb(C.crit), bg=hexRgb(C.panel);
   for(let k=0;k<GX*GY;k++){const s=field[k]; const col=s>0.5?cr:ok; const a=s>0.5?0.18+0.22*s:0.42*(1-s*1.6);
     for(let q=0;q<3;q++) id.data[k*4+q]=Math.round(bg[q]*(1-a)+col[q]*a); id.data[k*4+3]=255;}
   ic.putImageData(id,0,0); ctx.imageSmoothingEnabled=true; ctx.drawImage(img,L,T,pw,ph);
-  // contour IA (score = 0,5)
+  // AI boundary (score = 0.5)
   ctx.strokeStyle=C.crit; ctx.lineWidth=1.2; ctx.beginPath();
   for(let j=0;j<GY;j++)for(let i=0;i<GX-1;i++){const a=field[j*GX+i]>0.5,b=field[j*GX+i+1]>0.5; if(a!==b){const x=L+(i+1)/GX*pw,y=T+j/GY*ph; ctx.moveTo(x,y); ctx.lineTo(x,y+ph/GY);}}
   for(let j=0;j<GY-1;j++)for(let i=0;i<GX;i++){const a=field[j*GX+i]>0.5,b=field[(j+1)*GX+i]>0.5; if(a!==b){const x=L+i/GX*pw,y=T+(j+1)/GY*ph; ctx.moveTo(x,y); ctx.lineTo(x+pw/GX,y);}}
@@ -241,34 +241,34 @@ function draw(){
   ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=0;v<=90;v+=15){ctx.beginPath();ctx.moveTo(L-4,Y(v));ctx.lineTo(L,Y(v));ctx.stroke();ctx.fillText(v+' °C',L-6,Y(v));}
   ctx.strokeRect(L,T,pw,ph);
-  // rectangle des seuils
+  // threshold rectangle
   ctx.setLineDash([5,4]); ctx.strokeStyle=C.ink; ctx.lineWidth=1.6; ctx.strokeRect(X(0),Y(60),X(3.5)-X(0),Y(0)-Y(60)); ctx.setLineDash([]);
-  ctx.fillStyle=C.ink; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('seuils',X(0)+4,Y(60)-3);
+  ctx.fillStyle=C.ink; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('thresholds',X(0)+4,Y(60)-3);
   // point
   const px=X(Math.min(c,XMAX)), py=Y(Math.min(t,YMAX));
   ctx.beginPath(); ctx.arc(px,py,7,0,Math.PI*2); ctx.fillStyle=C.panel; ctx.fill(); ctx.lineWidth=2.5; ctx.strokeStyle=C.ink; ctx.stroke();
   ctx.beginPath(); ctx.arc(px,py,2.5,0,Math.PI*2); ctx.fillStyle=C.ink; ctx.fill();
 }
-const fmt=(v,d)=>v.toFixed(d).replace('.',',');
+const fmt=(v,d)=>v.toFixed(d);
 function update(){
   const t=+$('t').value,c=+$('c').value,r=+$('r').value,p=+$('p').value;
   $('to').textContent=fmt(t,1)+' °C'; $('co').textContent=fmt(c,2)+' A'; $('ro').textContent=fmt(r,3)+' g'; $('po').textContent=fmt(p,3)+' g';
   [...scenEl.children].forEach((b,i)=>b.setAttribute('aria-pressed',i===active?'true':'false'));
-  // seuils
-  const ls=[['Température',lvl(t,TH.t),fmt(t,1)+' °C'],['Vibration',lvl(r,TH.r),fmt(r,3)+' g'],['Courant',lvl(c,TH.c),fmt(c,2)+' A']];
+  // thresholds
+  const ls=[['Temperature',lvl(t,TH.t),fmt(t,1)+' °C'],['Vibration',lvl(r,TH.r),fmt(r,3)+' g'],['Current',lvl(c,TH.c),fmt(c,2)+' A']];
   const g=Math.max(...ls.map(x=>x[1]));
   $('vt').className='panel verdict '+VC[g]; $('vtp').textContent=LV[g];
   $('vtrows').innerHTML=ls.map(([n,l,v])=>`<span>${n}</span><span class="${CL[l]}">${LV[l]}</span><span>${v}</span>`).join('');
-  // IA
+  // AI
   const s=score(t,r,p,c), an=s>M.THR, cause=an?explain(t,r,p,c):'';
-  $('va').className='panel verdict '+(an?'is-crit':''); $('vap').textContent=an?'anomalie':'normal';
-  $('vas').textContent=Math.round(s*100)+' %';
+  $('va').className='panel verdict '+(an?'is-crit':''); $('vap').textContent=an?'anomaly':'normal';
+  $('vas').textContent=Math.round(s*100)+'%';
   const bar=$('vabar'); bar.style.width=(s*100).toFixed(1)+'%'; bar.style.background=an?'var(--crit)':'var(--ok)';
-  $('vamsg').textContent=an?`Combinaison jamais vue en fonctionnement sain. Cause probable : ${cause}.`:'Les mesures correspondent au fonctionnement normal appris.';
+  $('vamsg').textContent=an?`Combination never seen during healthy operation. Probable cause: ${cause}.`:'Measurements match the learned normal operation.';
   // message
   const ins=$('insight'), sc=SCEN[active];
   if(sc&&sc.why){ins.hidden=false;ins.textContent=sc.why;}
-  else if(an&&g===0){ins.hidden=false;ins.textContent='Les seuils disent « normal », l’IA détecte une anomalie : c’est exactement le cas qu’elle sert à attraper.';}
+  else if(an&&g===0){ins.hidden=false;ins.textContent='The thresholds say “normal” but the AI detects an anomaly: this is exactly the case it is designed to catch.';}
   else ins.hidden=true;
   draw();
 }

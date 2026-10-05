@@ -1,9 +1,9 @@
-# Lance toute la pile en une commande :   docker compose up --build
-# Avec le simulateur de machine :          docker compose --profile sim up --build
+# Starts the whole stack with one command:   docker compose up --build
+# With the machine simulator:                docker compose --profile sim up --build
 #
-# Par défaut le backend écoute le broker LOCAL (mosquitto).
-# Pour recevoir les données de Wokwi (qui publie sur le broker public), crée
-# un fichier .env à la racine avec :  MQTT_URL=mqtt://broker.hivemq.com:1883
+# By default the backend listens to the LOCAL broker (mosquitto).
+# To receive data from Wokwi (which publishes to the public broker), create
+# a .env file at the repository root containing:  MQTT_URL=mqtt://broker.hivemq.com:1883
 services:
   mosquitto:
     image: eclipse-mosquitto:2

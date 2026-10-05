@@ -1,27 +1,27 @@
 /*
  * ============================================================================
- *  ESP32 — Passerelle UART ↔ Wi-Fi/MQTT pour le nœud STM32
+ *  ESP32 — UART ↔ Wi-Fi/MQTT gateway for the STM32 node
  * ============================================================================
- *  Architecture complète :
+ *  Full architecture:
  *
- *    STM32 (capteurs, FreeRTOS) ──UART──► ESP32 (cette carte) ──Wi-Fi/MQTT──► serveur
- *                               ◄──UART── commandes "F1"/"F0" ◄── dashboard
+ *    STM32 (sensors, FreeRTOS) ──UART──► ESP32 (this board) ──Wi-Fi/MQTT──► server
+ *                              ◄──UART── "F1"/"F0" commands ◄── dashboard
  *
- *  Matériel réel : STM32 USART TX → ESP32 GPIO16 (RX2), STM32 RX ← GPIO17 (TX2), GND commun.
- *  Simulation Wokwi (WOKWI_SIM) : le STM32 et l'ESP32 tournent dans deux
- *  simulations séparées, reliées par un « câble virtuel » sur le PC
- *  (backend/tools/virtual-cable.js) ; la liaison passe alors par l'UART0.
+ *  Real hardware: STM32 USART TX → ESP32 GPIO16 (RX2), STM32 RX ← GPIO17 (TX2), common GND.
+ *  Wokwi simulation (WOKWI_SIM): the STM32 and the ESP32 run in two separate
+ *  simulations, connected by a "virtual cable" on the PC
+ *  (backend/tools/virtual-cable.js); the link then goes through UART0.
  *
- *  protocol.c / protocol.h sont les MÊMES fichiers que côté STM32 :
- *  un seul code de protocole, testé une fois, utilisé des deux côtés.
+ *  protocol.c / protocol.h are the SAME files as on the STM32 side:
+ *  a single protocol implementation, tested once, used on both ends.
  *
- *  Tâches FreeRTOS :
- *   - taskUart : lit l'UART, décode les trames, applique l'IA embarquée
- *                (TinyML), pousse le résultat dans une file
- *   - taskMqtt : Wi-Fi + MQTT, publie le JSON, relaie les commandes au STM32
+ *  FreeRTOS tasks:
+ *   - taskUart: reads the UART, decodes the frames, runs the on-device AI
+ *               (TinyML), pushes the result into a queue
+ *   - taskMqtt: Wi-Fi + MQTT, publishes the JSON, relays commands to the STM32
  *
- *  IA embarquée (« edge AI ») : un réseau de neurones (ai/train_model.py)
- *  calcule pour chaque trame un score d'anomalie, directement sur l'ESP32.
+ *  On-device AI ("edge AI"): a neural network (ai/train_model.py)
+ *  computes an anomaly score for every frame, directly on the ESP32.
  * ============================================================================
  */
 #include <Arduino.h>
@@ -29,16 +29,16 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "protocol.h"
-#include "tinyml.h"         // IA embarquée : détection d'anomalies
+#include "tinyml.h"         // on-device AI: anomaly detection
 
 #define WIFI_SSID     "Wokwi-GUEST"
 #define WIFI_PASS     ""
-// --- Broker MQTT : identifiants dans secrets.h (non publié sur GitHub) ------
+// --- MQTT broker: credentials in secrets.h (not published on GitHub) -------
 #if __has_include("secrets.h")
   #include "secrets.h"
 #endif
 #ifndef MQTT_HOST
-  #define MQTT_HOST    "broker.hivemq.com"   // repli : broker public (démo)
+  #define MQTT_HOST    "broker.hivemq.com"   // fallback: public broker (demo)
 #endif
 #ifndef MQTT_USE_TLS
   #define MQTT_USE_TLS 0
@@ -56,16 +56,16 @@
   #include <WiFiClientSecure.h>
   #include "ca_cert.h"
 #endif
-#define TOPIC_PREFIX  "pfe-monitor-7f3a"   // identique au backend
-#define DEVICE_ID     "stm32-01"           // la machine surveillée par le STM32
+#define TOPIC_PREFIX  "pfe-monitor-7f3a"   // same as the backend
+#define DEVICE_ID     "stm32-01"           // the machine monitored by the STM32
 
-#define PIN_LED_RX    2     // clignote à chaque trame reçue du STM32
-#define PIN_LED_NET   4     // allumée quand MQTT est connecté
+#define PIN_LED_RX    2     // toggles on every frame received from the STM32
+#define PIN_LED_NET   4     // on while MQTT is connected
 
 #ifdef WOKWI_SIM
-  #define LINK Serial         // simulation : UART0, relié au câble virtuel
+  #define LINK Serial         // simulation: UART0, connected to the virtual cable
 #else
-  #define LINK Serial2        // matériel : UART2 (GPIO16 RX / GPIO17 TX)
+  #define LINK Serial2        // hardware: UART2 (GPIO16 RX / GPIO17 TX)
   #define UART_RX_PIN 16
   #define UART_TX_PIN 17
 #endif
@@ -73,12 +73,12 @@
 static const char *LEVELS[] = {"NORMAL", "WARNING", "CRITICAL"};
 
 #if MQTT_USE_TLS
-WiFiClientSecure net;   // TLS : connexion chiffrée + certificat vérifié
+WiFiClientSecure net;   // TLS: encrypted connection + verified certificate
 #else
 WiFiClient net;
 #endif
 PubSubClient mqtt(net);
-// Une trame du STM32 + le verdict de l'IA embarquée
+// One STM32 frame + the on-device AI verdict
 struct Sample {
   proto_frame_t f;
   float   aiScore;
@@ -91,8 +91,8 @@ tinyml_state_t ai = {};
 proto_parser_t parser;
 char topicTelemetry[64], topicStatus[64], topicCmd[64];
 
-// Les messages de debug partent sur la même liaison que vers le STM32 en
-// simulation : on les préfixe par '#' (ignorés par le STM32) et on évite F1/F0.
+// In simulation, debug messages go out on the same link as the STM32 traffic:
+// they are prefixed with '#' (ignored by the STM32) and must avoid F1/F0.
 static void logLine(const char *s) {
 #ifdef WOKWI_SIM
   LINK.print("# [ESP32] ");
@@ -103,7 +103,7 @@ static void logLine(const char *s) {
 }
 
 // ---------------------------------------------------------------------------
-//  Réception UART : décodage octet par octet (parseur à états, avec checksum)
+//  UART reception: byte-by-byte decoding (state-machine parser, with checksum)
 // ---------------------------------------------------------------------------
 void taskUart(void *) {
   Sample smp;
@@ -112,23 +112,23 @@ void taskUart(void *) {
       if (proto_parser_feed(&parser, (char)LINK.read(), &smp.f)) {
         const proto_frame_t &f = smp.f;
         digitalWrite(PIN_LED_RX, !digitalRead(PIN_LED_RX));
-        // --- IA embarquée : score d'anomalie de cette mesure ---------------
+        // --- On-device AI: anomaly score of this measurement --------------
         if (f.flags & PROTO_FLAG_DHT_OK) {
           if (tinyml_update(&ai, f.temp_d / 10.0f, f.vib_mg / 1000.0f,
                             f.peak_mg / 1000.0f, f.curr_ma / 1000.0f)) {
             char msg[80];
             if (ai.anomaly)
-              snprintf(msg, sizeof msg, "IA: anomalie detectee (cause probable : %s, score %.2f)",
+              snprintf(msg, sizeof msg, "AI: anomaly detected (probable cause: %s, score %.2f)",
                        TINYML_CAUSE_STR[ai.cause], ai.score);
             else
-              snprintf(msg, sizeof msg, "IA: retour au fonctionnement normal");
+              snprintf(msg, sizeof msg, "AI: back to normal operation");
             logLine(msg);
           }
         }
         smp.aiScore = ai.score;
         smp.aiAnomaly = ai.anomaly;
         smp.aiCause = ai.cause;
-        if (xQueueSend(frameQueue, &smp, 0) != pdTRUE) {    // file pleine
+        if (xQueueSend(frameQueue, &smp, 0) != pdTRUE) {    // queue full
           Sample old;
           xQueueReceive(frameQueue, &old, 0);
           xQueueSend(frameQueue, &smp, 0);
@@ -140,7 +140,7 @@ void taskUart(void *) {
 }
 
 // ---------------------------------------------------------------------------
-//  Commandes du dashboard → STM32
+//  Dashboard commands → STM32
 // ---------------------------------------------------------------------------
 void onMqttMessage(char *, byte *payload, unsigned int len) {
   String cmd;
@@ -167,7 +167,7 @@ bool publishFrame(const Sample &smp) {
   JsonObject h = doc["health"].to<JsonObject>();
   h["temp"] = (bool)(f.flags & PROTO_FLAG_DHT_OK);
   h["mpu"]  = (bool)(f.flags & PROTO_FLAG_MPU_OK);
-  JsonObject a = doc["ai"].to<JsonObject>();      // verdict de l'IA embarquée
+  JsonObject a = doc["ai"].to<JsonObject>();      // on-device AI verdict
   a["score"]   = roundf(smp.aiScore * 1000) / 1000;
   a["anomaly"] = (bool)smp.aiAnomaly;
   a["cause"]   = TINYML_CAUSE_STR[smp.aiCause];
@@ -177,7 +177,7 @@ bool publishFrame(const Sample &smp) {
 }
 
 // ---------------------------------------------------------------------------
-//  Wi-Fi + MQTT avec reconnexion automatique
+//  Wi-Fi + MQTT with automatic reconnection
 // ---------------------------------------------------------------------------
 void taskMqtt(void *) {
   WiFi.mode(WIFI_STA);
@@ -198,14 +198,14 @@ void taskMqtt(void *) {
     }
     if (!mqtt.connected()) {
       digitalWrite(PIN_LED_NET, LOW);
-      if (wasConnected) { logLine("MQTT perdu, reconnexion"); wasConnected = false; }
+      if (wasConnected) { logLine("MQTT lost, reconnecting"); wasConnected = false; }
       String cid = String("bridge-") + DEVICE_ID + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
       if (mqtt.connect(cid.c_str(), MQTT_USER[0] ? MQTT_USER : nullptr, MQTT_PASS[0] ? MQTT_PASS : nullptr,
                        topicStatus, 1, true, "offline")) {
         mqtt.publish(topicStatus, "online", true);
         mqtt.subscribe(topicCmd);
         digitalWrite(PIN_LED_NET, HIGH);
-        logLine("MQTT connecte, en attente des trames du STM32");
+        logLine("MQTT connected, waiting for STM32 frames");
         wasConnected = true;
       } else {
         vTaskDelay(pdMS_TO_TICKS(2000));
@@ -215,7 +215,7 @@ void taskMqtt(void *) {
     mqtt.loop();
     Sample smp;
     while (mqtt.connected() && xQueuePeek(frameQueue, &smp, 0) == pdTRUE) {
-      if (!publishFrame(smp)) break;        // on garde la trame pour plus tard
+      if (!publishFrame(smp)) break;        // keep the frame for later
       xQueueReceive(frameQueue, &smp, 0);
     }
     vTaskDelay(pdMS_TO_TICKS(20));
@@ -236,7 +236,7 @@ void setup() {
   snprintf(topicCmd,       sizeof topicCmd,       "%s/%s/cmd",       TOPIC_PREFIX, DEVICE_ID);
   proto_parser_init(&parser);
   frameQueue = xQueueCreate(30, sizeof(Sample));
-  logLine("Passerelle STM32 -> MQTT demarree (IA embarquee TinyML active)");
+  logLine("STM32 -> MQTT gateway started (TinyML on-device AI enabled)");
   xTaskCreatePinnedToCore(taskUart, "uart", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(taskMqtt, "mqtt", 8192, NULL, 2, NULL, 0);
 }
@@ -247,7 +247,7 @@ void loop() {
   if (millis() - t > 15000) {
     t = millis();
     char msg[96];
-    snprintf(msg, sizeof msg, "trames OK=%lu (+%lu) err.checksum=%lu err.format=%lu",
+    snprintf(msg, sizeof msg, "frames OK=%lu (+%lu) err.checksum=%lu err.format=%lu",
              (unsigned long)parser.ok_count, (unsigned long)(parser.ok_count - lastOk),
              (unsigned long)parser.err_checksum, (unsigned long)parser.err_format);
     lastOk = parser.ok_count;

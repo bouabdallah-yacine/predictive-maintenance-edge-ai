@@ -1,3 +1,3 @@
-# Active l'optimisation à l'édition de liens (LTO) : code plus compact.
+# Enables link-time optimisation (LTO): more compact code.
 Import("env")
 env.Append(CCFLAGS=["-flto"], LINKFLAGS=["-flto"])

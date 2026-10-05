@@ -1,19 +1,19 @@
 /**
  * @file  app_tasks.c
- * @brief Application FreeRTOS (CMSIS-RTOS v2) du nœud d'acquisition STM32.
+ * @brief FreeRTOS (CMSIS-RTOS v2) application of the STM32 acquisition node.
  *
  *  ┌──────────────┐ 100 Hz  ┌──────────────┐
  *  │ VibTask (P5) │───────► │              │
  *  └──────────────┘ mutex   │  g_measure   │ 1 Hz  ┌─────────────────┐  queue  ┌───────────────┐ UART1
- *  ┌──────────────┐ 0,5 Hz  │  (partagé)   │─────► │ AnalysisTask(P4)│───────► │ CommTask (P3) │──────► ESP32
+ *  ┌──────────────┐ 0.5 Hz  │  (shared)    │─────► │ AnalysisTask(P4)│───────► │ CommTask (P3) │──────► ESP32
  *  │ EnvTask (P4) │───────► │              │       └───────┬─────────┘         └───────────────┘
  *  └──────────────┘         └──────────────┘               │ LEDs / buzzer
- *  Bouton B1 (EXTI) ──► thread flag ──► AnalysisTask (bascule panne simulée)
+ *  Button B1 (EXTI) ──► thread flag ──► AnalysisTask (toggles simulated fault)
  *
- *  Intégration dans un projet CubeMX :
- *   - Middleware FREERTOS, interface CMSIS_V2 ; Timebase HAL = TIM (pas SysTick)
- *   - Dans main.c, USER CODE BEGIN RTOS_THREADS :  App_Init();
- *   - Dans main.c, USER CODE BEGIN 4 : rediriger HAL_GPIO_EXTI_Callback (déjà ici)
+ *  Integration into a CubeMX project:
+ *   - FREERTOS middleware, CMSIS_V2 interface; HAL timebase = TIM (not SysTick)
+ *   - In main.c, USER CODE BEGIN RTOS_THREADS:  App_Init();
+ *   - In main.c, USER CODE BEGIN 4: redirect HAL_GPIO_EXTI_Callback (already here)
  */
 #include "main.h"
 #include "cmsis_os2.h"
@@ -26,8 +26,8 @@
 
 extern I2C_HandleTypeDef  hi2c1;
 extern ADC_HandleTypeDef  hadc1;
-extern UART_HandleTypeDef huart1;   /* liaison vers l'ESP32 */
-extern UART_HandleTypeDef huart2;   /* console de debug (ST-Link VCP) */
+extern UART_HandleTypeDef huart1;   /* link to the ESP32 */
+extern UART_HandleTypeDef huart2;   /* debug console (ST-Link VCP) */
 
 /* ------------------------------------------------------------------------ */
 typedef struct {
@@ -55,14 +55,14 @@ static const osThreadAttr_t analysisAttr = { .name = "analysis", .stack_size = 5
 static const osThreadAttr_t commAttr     = { .name = "comm",     .stack_size = 512 * 4, .priority = osPriorityNormal };
 
 /* ------------------------------------------------------------------------ */
-/*  Génération de données simulées (Renode / démo sans capteurs)            */
+/*  Simulated data generation (Renode / demo without sensors)               */
 /* ------------------------------------------------------------------------ */
 #if SIMULATED_SENSORS
 static float frand(void) { return (float)rand() / (float)RAND_MAX - 0.5f; }
 #endif
 
 /* ------------------------------------------------------------------------ */
-/*  VibTask : échantillonnage 100 Hz, RMS + crête sur fenêtre de 1 s        */
+/*  VibTask: 100 Hz sampling, RMS + peak over a 1 s window                  */
 /* ------------------------------------------------------------------------ */
 static void VibTask(void *arg)
 {
@@ -81,7 +81,7 @@ static void VibTask(void *arg)
   uint32_t next = osKernelGetTickCount();
   for (;;) {
     next += VIB_PERIOD_MS;
-    osDelayUntil(next);                      /* période stricte, sans dérive */
+    osDelayUntil(next);                      /* strict period, no drift */
 
     int32_t dyn_mg;
 #if SIMULATED_SENSORS
@@ -89,9 +89,9 @@ static void VibTask(void *arg)
 #else
     mpu_raw_t raw;
     if (MPU6050_ReadAccel(&hi2c1, &raw) != HAL_OK) { ok = 0; continue; }
-    dyn_mg = MPU6050_MagnitudeMg(&raw) - 1000;  /* retire la gravité */
+    dyn_mg = MPU6050_MagnitudeMg(&raw) - 1000;  /* remove gravity */
 #endif
-    if (g_fault) {                             /* balourd simulé à 25 Hz */
+    if (g_fault) {                             /* simulated imbalance at 25 Hz */
       dyn_mg += (int32_t)(900.0f * sinf(2.0f * 3.14159265f * 25.0f * (float)n / 100.0f));
     }
     win[idx++] = (int16_t)dyn_mg;
@@ -99,7 +99,7 @@ static void VibTask(void *arg)
 
     if (idx >= VIB_WINDOW) {
       idx = 0;
-      /* RMS de la composante alternative (moyenne de la fenêtre retirée) */
+      /* RMS of the AC component (window mean removed) */
       int32_t mean = 0;
       for (int i = 0; i < VIB_WINDOW; i++) mean += win[i];
       mean /= VIB_WINDOW;
@@ -120,7 +120,7 @@ static void VibTask(void *arg)
 }
 
 /* ------------------------------------------------------------------------ */
-/*  EnvTask : DHT22 (toutes les 2 s) + courant ACS712                        */
+/*  EnvTask: DHT22 (every 2 s) + ACS712 current                              */
 /* ------------------------------------------------------------------------ */
 static void EnvTask(void *arg)
 {
@@ -154,7 +154,7 @@ static void EnvTask(void *arg)
 }
 
 /* ------------------------------------------------------------------------ */
-/*  AnalysisTask : niveaux d'alerte, actionneurs, construction de la trame   */
+/*  AnalysisTask: alert levels, actuators, frame building                    */
 /* ------------------------------------------------------------------------ */
 static level_t level_of(int32_t v, int32_t warn, int32_t crit)
 {
@@ -176,13 +176,13 @@ static void AnalysisTask(void *arg)
   uint32_t next = osKernelGetTickCount();
 
   for (;;) {
-    /* Attend soit l'échéance de 1 s, soit un appui bouton */
+    /* Wait for either the 1 s deadline or a button press */
     next += REPORT_PERIOD_MS;
     int32_t wait = (int32_t)(next - osKernelGetTickCount());
     uint32_t flags = osThreadFlagsWait(FLAG_BUTTON, osFlagsWaitAny, wait > 0 ? (uint32_t)wait : 0);
     if (!(flags & osFlagsError) && (flags & FLAG_BUTTON)) {
       g_fault = !g_fault;
-      osDelayUntil(next);              /* garde la cadence de 1 Hz */
+      osDelayUntil(next);              /* keep the 1 Hz rate */
     }
 
     measure_t m;
@@ -205,7 +205,7 @@ static void AnalysisTask(void *arg)
                          (g_fault  ? PROTO_FLAG_FAULT  : 0) |
                          ((uint8_t)g << PROTO_LEVEL_SHIFT)),
     };
-    /* File pleine → on écrase la plus ancienne (la donnée fraîche prime) */
+    /* Queue full → overwrite the oldest entry (fresh data wins) */
     if (osMessageQueuePut(frameQueue, &f, 0, 0) != osOK) {
       proto_frame_t old;
       osMessageQueueGet(frameQueue, &old, NULL, 0);
@@ -215,7 +215,7 @@ static void AnalysisTask(void *arg)
 }
 
 /* ------------------------------------------------------------------------ */
-/*  CommTask : sérialisation + envoi UART vers l'ESP32 (et copie debug)      */
+/*  CommTask: serialisation + UART send to the ESP32 (and debug copy)        */
 /* ------------------------------------------------------------------------ */
 static void CommTask(void *arg)
 {
@@ -234,14 +234,14 @@ static void CommTask(void *arg)
 }
 
 /* ------------------------------------------------------------------------ */
-/*  Interruption bouton : ne fait que signaler la tâche (ISR courte)         */
+/*  Button interrupt: only signals the task (short ISR)                      */
 /* ------------------------------------------------------------------------ */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   static uint32_t last = 0;
   if (GPIO_Pin == FAULT_BTN_Pin && analysisTaskHandle) {
     uint32_t now = HAL_GetTick();
-    if (now - last > 200) {                        /* anti-rebond */
+    if (now - last > 200) {                        /* debounce */
       osThreadFlagsSet(analysisTaskHandle, FLAG_BUTTON);
       last = now;
     }
@@ -252,7 +252,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void App_Init(void)
 {
   const osMutexAttr_t mAttr = { .name = "measure", .attr_bits = osMutexPrioInherit };
-  measureMutex = osMutexNew(&mAttr);                 /* héritage de priorité */
+  measureMutex = osMutexNew(&mAttr);                 /* priority inheritance */
   frameQueue   = osMessageQueueNew(8, sizeof(proto_frame_t), NULL);
 
   osThreadNew(VibTask, NULL, &vibAttr);
@@ -260,6 +260,6 @@ void App_Init(void)
   analysisTaskHandle = osThreadNew(AnalysisTask, NULL, &analysisAttr);
   osThreadNew(CommTask, NULL, &commAttr);
 
-  const char *hello = "\r\n[STM32] Machine Monitor - FreeRTOS demarre\r\n";
+  const char *hello = "\r\n[STM32] Machine Monitor - FreeRTOS started\r\n";
   HAL_UART_Transmit(&huart2, (uint8_t *)hello, (uint16_t)strlen(hello), 50);
 }

@@ -1,6 +1,6 @@
 /**
  * @file  sensors.c
- * @brief Pilotes bas niveau des capteurs (HAL STM32).
+ * @brief Low-level sensor drivers (STM32 HAL).
  */
 #include "sensors.h"
 #include "app_config.h"
@@ -9,7 +9,7 @@
 #include <math.h>
 
 /* ------------------------------------------------------------------------ */
-/*  MPU6050 — accéléromètre I2C                                             */
+/*  MPU6050 — I2C accelerometer                                             */
 /* ------------------------------------------------------------------------ */
 #define MPU_ADDR          (0x68 << 1)
 #define MPU_WHO_AM_I      0x75
@@ -18,14 +18,14 @@
 #define MPU_CONFIG        0x1A
 #define MPU_ACCEL_CONFIG  0x1C
 #define MPU_ACCEL_XOUT_H  0x3B
-#define MPU_LSB_PER_G     8192      /* plage ±4 g */
+#define MPU_LSB_PER_G     8192      /* ±4 g range */
 
 HAL_StatusTypeDef MPU6050_Init(I2C_HandleTypeDef *hi2c)
 {
   uint8_t id = 0, v;
   if (HAL_I2C_Mem_Read(hi2c, MPU_ADDR, MPU_WHO_AM_I, 1, &id, 1, 50) != HAL_OK || id != 0x68)
     return HAL_ERROR;
-  v = 0x00; HAL_I2C_Mem_Write(hi2c, MPU_ADDR, MPU_PWR_MGMT_1,   1, &v, 1, 50);  /* réveil */
+  v = 0x00; HAL_I2C_Mem_Write(hi2c, MPU_ADDR, MPU_PWR_MGMT_1,   1, &v, 1, 50);  /* wake up */
   v = 0x07; HAL_I2C_Mem_Write(hi2c, MPU_ADDR, MPU_SMPLRT_DIV,   1, &v, 1, 50);  /* 1 kHz */
   v = 0x03; HAL_I2C_Mem_Write(hi2c, MPU_ADDR, MPU_CONFIG,       1, &v, 1, 50);  /* DLPF 44 Hz */
   v = 0x08; HAL_I2C_Mem_Write(hi2c, MPU_ADDR, MPU_ACCEL_CONFIG, 1, &v, 1, 50);  /* ±4 g */
@@ -50,8 +50,8 @@ int32_t MPU6050_MagnitudeMg(const mpu_raw_t *r)
 }
 
 /* ------------------------------------------------------------------------ */
-/*  DHT22 — protocole 1 fil propriétaire, timing en µs via le compteur DWT   */
-/*  Broche configurée dans CubeMX : GPIO_Output Open-Drain + pull-up.       */
+/*  DHT22 — proprietary 1-wire protocol, µs timing via the DWT counter      */
+/*  Pin configured in CubeMX: GPIO_Output Open-Drain + pull-up.             */
 /* ------------------------------------------------------------------------ */
 static inline void dwt_init(void)
 {
@@ -68,7 +68,7 @@ static inline void delay_us(uint32_t us)
   while ((DWT->CYCCNT - start) < n) {}
 }
 
-/* Attend que la broche prenne le niveau `level` ; renvoie la durée en µs ou -1 */
+/* Waits for the pin to reach `level`; returns the duration in µs or -1 */
 static int32_t wait_level(GPIO_PinState level, uint32_t timeout_us)
 {
   uint32_t start = DWT->CYCCNT, max = micros_cycles(timeout_us);
@@ -81,27 +81,27 @@ static int32_t wait_level(GPIO_PinState level, uint32_t timeout_us)
 void DHT22_Init(void)
 {
   dwt_init();
-  HAL_GPIO_WritePin(DHT22_GPIO_Port, DHT22_Pin, GPIO_PIN_SET);   /* ligne libérée */
+  HAL_GPIO_WritePin(DHT22_GPIO_Port, DHT22_Pin, GPIO_PIN_SET);   /* line released */
 }
 
 HAL_StatusTypeDef DHT22_Read(int16_t *temp_d, uint16_t *hum_d)
 {
   uint8_t data[5] = {0};
 
-  /* Signal de départ : ligne à 0 pendant ≥ 1 ms */
+  /* Start signal: line held low for ≥ 1 ms */
   HAL_GPIO_WritePin(DHT22_GPIO_Port, DHT22_Pin, GPIO_PIN_RESET);
   vTaskDelay(pdMS_TO_TICKS(2));
   HAL_GPIO_WritePin(DHT22_GPIO_Port, DHT22_Pin, GPIO_PIN_SET);
 
-  /* Section critique ≈ 5 ms : le timing µs ne tolère aucune préemption */
+  /* ≈ 5 ms critical section: µs timing cannot tolerate any preemption */
   taskENTER_CRITICAL();
   HAL_StatusTypeDef st = HAL_ERROR;
-  if (wait_level(GPIO_PIN_RESET, 100) < 0) goto out;   /* réponse capteur 80 µs bas */
-  if (wait_level(GPIO_PIN_SET,   100) < 0) goto out;   /* puis 80 µs haut */
+  if (wait_level(GPIO_PIN_RESET, 100) < 0) goto out;   /* sensor response: 80 µs low */
+  if (wait_level(GPIO_PIN_SET,   100) < 0) goto out;   /* then 80 µs high */
   if (wait_level(GPIO_PIN_RESET, 100) < 0) goto out;
 
   for (int i = 0; i < 40; i++) {
-    if (wait_level(GPIO_PIN_SET, 70) < 0) goto out;     /* 50 µs bas */
+    if (wait_level(GPIO_PIN_SET, 70) < 0) goto out;     /* 50 µs low */
     int32_t high = wait_level(GPIO_PIN_RESET, 100);     /* 26 µs = 0, 70 µs = 1 */
     if (high < 0) goto out;
     data[i / 8] = (uint8_t)((data[i / 8] << 1) | (high > 45 ? 1 : 0));
@@ -120,7 +120,7 @@ out:
 }
 
 /* ------------------------------------------------------------------------ */
-/*  ACS712 — capteur de courant à effet Hall, lu par l'ADC                  */
+/*  ACS712 — Hall-effect current sensor, read through the ADC               */
 /* ------------------------------------------------------------------------ */
 uint16_t ACS712_ReadmA(ADC_HandleTypeDef *hadc, uint8_t n)
 {
@@ -137,6 +137,6 @@ uint16_t ACS712_ReadmA(ADC_HandleTypeDef *hadc, uint8_t n)
 
   int32_t mv = (int32_t)((sum / count) * ADC_VREF_MV / ADC_MAX);
   int32_t ma = (mv - ACS_ZERO_MV) * 1000 / ACS_SENS_UV_PER_MA;
-  if (ma < 0) ma = -ma;                         /* courant alternatif / sens inverse */
+  if (ma < 0) ma = -ma;                         /* alternating current / reversed direction */
   return (uint16_t)(ma > 65535 ? 65535 : ma);
 }

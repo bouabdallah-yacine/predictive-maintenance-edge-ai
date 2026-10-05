@@ -15,7 +15,7 @@
     { "type": "wokwi-resistor", "id": "r2", "top": 360, "left": 70, "rotate": 90, "attrs": { "value": "220" } },
     { "type": "wokwi-resistor", "id": "r3", "top": 360, "left": 120, "rotate": 90, "attrs": { "value": "220" } },
     { "type": "wokwi-buzzer", "id": "bz1", "top": 270, "left": 200, "attrs": { "volume": "0.1" } },
-    { "type": "wokwi-pushbutton", "id": "btn1", "top": 120, "left": -200, "attrs": { "color": "red", "label": "Panne" } }
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 120, "left": -200, "attrs": { "color": "red", "label": "Fault" } }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],

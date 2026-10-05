@@ -1,17 +1,17 @@
 /*
  * ============================================================================
- *  ESP32 — Passerelle UART → Wi-Fi/MQTT (version "architecture complète")
+ *  ESP32 — UART → Wi-Fi/MQTT gateway ("full architecture" version)
  * ============================================================================
- *  À utiliser quand le STM32 fait l'acquisition :
- *     STM32 (USART1 TX PA9) ──► ESP32 GPIO16 (RX2)     + GND commun !
+ *  Use this when the STM32 does the acquisition:
+ *     STM32 (USART1 TX PA9) ──► ESP32 GPIO16 (RX2)     + common GND!
  *     STM32 (USART1 RX PA10) ◄── ESP32 GPIO17 (TX2)
  *
- *  protocol.c / protocol.h sont les MÊMES fichiers que côté STM32 :
- *  un seul code de protocole, testé une fois, utilisé des deux côtés.
+ *  protocol.c / protocol.h are the SAME files as on the STM32 side:
+ *  a single protocol implementation, tested once, used on both ends.
  *
- *  Deux tâches FreeRTOS :
- *   - taskUart : lit Serial2, décode les trames, les pousse dans une queue
- *   - taskMqtt : Wi-Fi + MQTT, publie le JSON (même format que sketch.ino)
+ *  Two FreeRTOS tasks:
+ *   - taskUart: reads Serial2, decodes the frames, pushes them into a queue
+ *   - taskMqtt: Wi-Fi + MQTT, publishes the JSON (same format as sketch.ino)
  * ============================================================================
  */
 #include <WiFi.h>
@@ -41,7 +41,7 @@ void taskUart(void *) {
   for (;;) {
     while (Serial2.available()) {
       if (proto_parser_feed(&parser, (char)Serial2.read(), &f)) {
-        if (xQueueSend(frameQueue, &f, 0) != pdTRUE) {      // file pleine
+        if (xQueueSend(frameQueue, &f, 0) != pdTRUE) {      // queue full
           proto_frame_t old;
           xQueueReceive(frameQueue, &old, 0);
           xQueueSend(frameQueue, &f, 0);
@@ -84,7 +84,7 @@ void taskMqtt(void *) {
       String cid = String("bridge-") + DEVICE_ID + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
       if (mqtt.connect(cid.c_str(), nullptr, nullptr, topicStatus, 1, true, "offline")) {
         mqtt.publish(topicStatus, "online", true);
-        Serial.println("[MQTT] connecté");
+        Serial.println("[MQTT] connected");
       } else { vTaskDelay(pdMS_TO_TICKS(2000)); continue; }
     }
     mqtt.loop();
@@ -112,7 +112,7 @@ void loop() {
   static uint32_t t = 0;
   if (millis() - t > 10000) {
     t = millis();
-    Serial.printf("[UART] trames OK=%lu  err.checksum=%lu  err.format=%lu\n",
+    Serial.printf("[UART] frames OK=%lu  err.checksum=%lu  err.format=%lu\n",
                   (unsigned long)parser.ok_count, (unsigned long)parser.err_checksum,
                   (unsigned long)parser.err_format);
   }

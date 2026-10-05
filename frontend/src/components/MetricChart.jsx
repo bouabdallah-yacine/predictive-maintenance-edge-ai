@@ -2,7 +2,7 @@ import {
   CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 
-const fmtTime = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const fmtTime = (t) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 export default function MetricChart({ title, unit, data, dataKey, color, th, secondKey }) {
   const values = data.map((d) => d[secondKey ?? dataKey]).filter((v) => typeof v === 'number');
@@ -11,7 +11,7 @@ export default function MetricChart({ title, unit, data, dataKey, color, th, sec
     <div className="card chart">
       <div className="chart-head">
         <h3>{title}</h3>
-        <span className="muted">seuils : {th.warn} / {th.crit} {unit}</span>
+        <span className="muted">thresholds: {th.warn} / {th.crit} {unit}</span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
@@ -27,7 +27,7 @@ export default function MetricChart({ title, unit, data, dataKey, color, th, sec
                    formatter={(v, name) => [`${v} ${unit}`, name]}
                    contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }} />
           {secondKey && (
-            <Line type="monotone" dataKey={secondKey} name="crête" stroke={color} strokeOpacity={0.35}
+            <Line type="monotone" dataKey={secondKey} name="peak" stroke={color} strokeOpacity={0.35}
                   dot={false} isAnimationActive={false} strokeWidth={1} />
           )}
           <Line type="monotone" dataKey={dataKey} name={title} stroke={color} dot={false}
