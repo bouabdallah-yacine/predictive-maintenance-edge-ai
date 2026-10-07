@@ -5,15 +5,12 @@
 <style>
 /* Layout: instrumentation panel — controls on the left, decision map on the right, compared verdicts below */
 :root{
-  --bg:#eef1ef; --panel:#ffffff; --ink:#132022; --muted:#5b6a6b; --line:#d3dbd8; --grid:#e3e9e6;
+  --bg:#ffffff; --panel:#f6f8f7; --ink:#132022; --muted:#5b6a6b; --line:#d3dbd8; --grid:#e3e9e6;
   --ok:#0e7f62; --warn:#c77700; --crit:#c2392b; --accent:#c77700; --chip:#e4ebe8;
   --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0d1416; --panel:#142022; --ink:#e2eae7; --muted:#8fa09e; --line:#243437; --grid:#1b2a2d;
-  --ok:#2fbf93; --warn:#f0a531; --crit:#ef6a58; --accent:#f0a531; --chip:#1c2b2e; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0d1416; --panel:#142022; --ink:#e2eae7; --muted:#8fa09e; --line:#243437; --grid:#1b2a2d;
   --ok:#2fbf93; --warn:#f0a531; --crit:#ef6a58; --accent:#f0a531; --chip:#1c2b2e; color-scheme:dark}
@@ -84,8 +81,11 @@ canvas{width:100%;height:100%;display:block}
 .stack span{font:12px var(--f-mono);border:1px solid var(--line);border-radius:4px;padding:3px 8px;color:var(--muted)}
 footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
 @media (prefers-reduced-motion:reduce){.bar span{transition:none}}
+.themebtn{position:fixed;top:14px;right:16px;z-index:10;font:600 13px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.themebtn:hover{border-color:var(--accent)}
 </style>
 
+<button class="themebtn" id="themebtn" type="button" aria-label="Switch light or dark mode">🌙 Dark mode</button>
 <div class="wrap">
   <header>
     <div class="eyebrow">IoT project · predictive maintenance · TinyML</div>
@@ -274,6 +274,10 @@ function update(){
 }
 new ResizeObserver(()=>draw()).observe(cv);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+(function(){const b=document.getElementById('themebtn'),r=document.documentElement;
+const set=t=>{r.setAttribute('data-theme',t);b.textContent=t==='dark'?'☀️ Light mode':'🌙 Dark mode';try{localStorage.setItem('mm-theme',t)}catch(e){}};
+let t='light';try{t=localStorage.getItem('mm-theme')||'light'}catch(e){}
+set(t);b.addEventListener('click',()=>set(r.getAttribute('data-theme')==='dark'?'light':'dark'));})();
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 apply(2);
 </script>
