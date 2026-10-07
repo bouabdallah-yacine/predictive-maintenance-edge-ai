@@ -1,6 +1,9 @@
 # ⚙️ Machine Monitor: industrial monitoring and anomaly detection
 
 [![Tests](https://github.com/bouabdellah-yacine/predictive-maintenance-edge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bouabdellah-yacine/predictive-maintenance-edge-ai/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/%E2%96%B6%20Live%20demo-open%20in%20browser-F5A524)](https://bouabdellah-yacine.github.io/predictive-maintenance-edge-ai/)
+
+> **▶ [Try the live demo](https://bouabdellah-yacine.github.io/predictive-maintenance-edge-ai/)**: the embedded AI running in your browser, no install needed.
 
 An IoT **predictive maintenance** system: sensors monitor a machine (temperature, vibration, current),
 a microcontroller running **FreeRTOS** detects drifts, an **embedded neural network (TinyML)** spots
